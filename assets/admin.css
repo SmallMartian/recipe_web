@@ -910,6 +910,10 @@ button:hover {
   opacity: 0.68;
 }
 
+.item-row[data-group-key] {
+  position: relative;
+}
+
 .item-main {
   display: flex;
   align-items: center;

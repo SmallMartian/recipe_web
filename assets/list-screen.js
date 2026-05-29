@@ -55,6 +55,94 @@ function formatQuantity(item) {
   return `${shown} ${item.unit || ''}`.trim();
 }
 
+function normalizeKeyName(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function quantityNumber(value) {
+  const number = Number(String(value ?? '').replace(',', '.'));
+  return Number.isFinite(number) ? number : 0;
+}
+
+const UNIT_META = {
+  pcs: { family: 'count', factor: 1 },
+  l: { family: 'volume', factor: 1000 },
+  ml: { family: 'volume', factor: 1 },
+  kg: { family: 'mass', factor: 1000 },
+  dkg: { family: 'mass', factor: 10 },
+  g: { family: 'mass', factor: 1 },
+};
+
+function unitsCompatible(left, right) {
+  return UNIT_META[normalizeItemUnit(left)]?.family === UNIT_META[normalizeItemUnit(right)]?.family;
+}
+
+function convertQuantity(quantity, fromUnit, toUnit) {
+  const from = UNIT_META[normalizeItemUnit(fromUnit)] || UNIT_META.pcs;
+  const to = UNIT_META[normalizeItemUnit(toUnit)] || UNIT_META.pcs;
+  const numeric = quantityNumber(quantity);
+  if (from.family !== to.family) return numeric;
+  return (numeric * from.factor) / to.factor;
+}
+
+function groupListItems(items) {
+  const groups = new Map();
+
+  for (const item of Array.isArray(items) ? items : []) {
+    const key = normalizeKeyName(item.name);
+    if (!key) continue;
+
+    const group = groups.get(key) || {
+      key,
+      name: item.name,
+      unit: item.unit || 'pcs',
+      quantity: 0,
+      min_stock: item.min_stock,
+      expiry_date: item.expiry_date || null,
+      status: item.status,
+      updated_at: item.updated_at,
+      items: [],
+    };
+
+    group.items.push(item);
+    group.quantity += unitsCompatible(item.unit, group.unit)
+      ? convertQuantity(item.quantity, item.unit, group.unit)
+      : quantityNumber(item.quantity);
+    group.min_stock = group.min_stock ?? item.min_stock ?? null;
+
+    if (listType === 'inventory' && item.expiry_date) {
+      if (!group.expiry_date || item.expiry_date < group.expiry_date) {
+        group.expiry_date = item.expiry_date;
+      }
+    }
+
+    if (item.status === 'active') group.status = 'active';
+    else if (item.status === 'checked' && group.status !== 'active') group.status = 'checked';
+
+    if (!group.updated_at || String(item.updated_at || '') > String(group.updated_at || '')) {
+      group.updated_at = item.updated_at;
+    }
+
+    groups.set(key, group);
+  }
+
+  const grouped = [...groups.values()];
+  if (listType === 'inventory' && currentSort === 'expiry') {
+    return grouped.sort((a, b) => {
+      const expiryA = a.expiry_date || '9999-12-31';
+      const expiryB = b.expiry_date || '9999-12-31';
+      return expiryA.localeCompare(expiryB) || a.name.localeCompare(b.name);
+    });
+  }
+
+  return grouped.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+}
+
 function getClientItemId() {
   if (window.crypto?.randomUUID) {
     return window.crypto.randomUUID();
@@ -180,36 +268,39 @@ async function loadAllListItemsForHousehold(householdId) {
 }
 
 function renderItems(items) {
-  if (items.length === 0) {
+  const groups = groupListItems(items);
+
+  if (groups.length === 0) {
     itemsTarget.innerHTML = `<p class="empty-state">${listType === 'inventory' ? 'Inventar je prazdny.' : 'Nakupny zoznam je prazdny.'}</p>`;
     return;
   }
 
-  itemsTarget.innerHTML = items
-    .map((item) => {
-      const checked = item.status === 'checked';
+  itemsTarget.innerHTML = groups
+    .map((group) => {
+      const checked = group.status === 'checked';
       const detailParts = [
-        listType === 'inventory' && item.expiry_date ? `Expiracia ${item.expiry_date}` : '',
-        listType === 'inventory' && item.min_stock !== null ? `Minimum ${item.min_stock}` : '',
+        listType === 'inventory' && group.expiry_date ? `Najblizsia expiracia ${group.expiry_date}` : '',
+        listType === 'inventory' && group.min_stock !== null ? `Minimum ${group.min_stock}` : '',
+        group.items.length > 1 ? `${group.items.length} zaznamy` : '',
         listType === 'shopping' && checked ? 'Vybavene' : '',
       ].filter(Boolean);
 
       return `
-        <article class="item-row ${checked ? 'is-checked' : ''}" data-item-id="${escapeHtml(item.id)}">
+        <article class="item-row ${checked ? 'is-checked' : ''}" data-group-key="${escapeHtml(group.key)}">
           <div class="item-main">
             ${
               listType === 'shopping'
-                ? `<input type="checkbox" data-action="toggle" ${checked ? 'checked' : ''} aria-label="Vybavene" />`
+                ? `<input type="checkbox" data-action="toggle-group" ${checked ? 'checked' : ''} aria-label="Vybavene" />`
                 : ''
             }
             <div>
-              <strong>${escapeHtml(item.name)}</strong>
+              <strong>${escapeHtml(group.name)}</strong>
               <span>${escapeHtml(detailParts.join(' · '))}</span>
             </div>
           </div>
           <div class="item-actions">
-            <span class="qty-chip">${escapeHtml(formatQuantity(item))}</span>
-            <button type="button" class="remove" data-action="delete">Zmazat</button>
+            <span class="qty-chip">${escapeHtml(formatQuantity(group))}</span>
+            <button type="button" class="remove" data-action="delete-group">Zmazat</button>
           </div>
         </article>
       `;
@@ -329,16 +420,22 @@ async function handleItemAction(event) {
   const action = event.target.dataset.action;
   if (!action) return;
 
-  const row = event.target.closest('[data-item-id]');
-  const itemId = row?.dataset.itemId;
-  if (!itemId) return;
+  const row = event.target.closest('[data-group-key]');
+  const groupKey = row?.dataset.groupKey;
+  if (!groupKey) return;
 
-  if (action === 'toggle' && event.type === 'change') {
+  const items = await loadItems();
+  const group = groupListItems(items).find((entry) => entry.key === groupKey);
+  if (!group) return;
+  const ids = group.items.map((item) => item.id).filter(Boolean);
+  if (ids.length === 0) return;
+
+  if (action === 'toggle-group' && event.type === 'change') {
     const status = event.target.checked ? 'checked' : 'active';
     const { error } = await supabase
       .from('list_items')
       .update({ status, updated_by: currentSession.user.id })
-      .eq('id', itemId);
+      .in('id', ids);
 
     if (error) {
       setStatus(error.message);
@@ -348,8 +445,8 @@ async function handleItemAction(event) {
     await refreshItems();
   }
 
-  if (action === 'delete' && event.type === 'click') {
-    const { error } = await supabase.from('list_items').delete().eq('id', itemId);
+  if (action === 'delete-group' && event.type === 'click') {
+    const { error } = await supabase.from('list_items').delete().in('id', ids);
 
     if (error) {
       setStatus(error.message);
