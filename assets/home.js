@@ -1,0 +1,346 @@
+import { hasSupabaseConfig, supabase } from './supabase-client.js';
+
+const publicHome = document.querySelector('#public-home');
+const dashboardHome = document.querySelector('#dashboard-home');
+const statusLine = document.querySelector('#home-status');
+const logoutButton = document.querySelector('#home-logout');
+const loginLink = document.querySelector('[data-login-link]');
+const authLinks = [...document.querySelectorAll('[data-auth-link]')];
+const householdSelect = document.querySelector('#household-select');
+
+const ACTIVE_HOUSEHOLD_KEY = 'recipe_web_active_household_id';
+
+function setStatus(message) {
+  statusLine.textContent = message || '';
+}
+
+function formatQuantity(item) {
+  const quantity = Number(item.quantity);
+  const shownQuantity = Number.isFinite(quantity) ? Number.parseFloat(quantity.toFixed(2)) : item.quantity;
+  return `${shownQuantity} ${item.unit || ''}`.trim();
+}
+
+function daysUntil(dateValue) {
+  if (!dateValue) return null;
+
+  const today = new Date();
+  const target = new Date(`${dateValue}T00:00:00`);
+  today.setHours(0, 0, 0, 0);
+
+  return Math.ceil((target - today) / 86400000);
+}
+
+function normalizeIngredientName(value) {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function renderRecipeCard(recipe) {
+  const image = recipe.image_url || 'https://images.unsplash.com/photo-1495521821757-a1efb6729352?auto=format&fit=crop&w=900&q=80';
+  const url = `/recipes/?id=${encodeURIComponent(recipe.id)}`;
+  const time = [recipe.prep_time_minutes, recipe.cook_time_minutes]
+    .map((value) => Number(value || 0))
+    .reduce((sum, value) => sum + value, 0);
+
+  return `
+    <a class="recipe-card" href="${url}">
+      <img src="${image}" alt="" loading="lazy" />
+      <div>
+        <h3>${recipe.title}</h3>
+        <p>${recipe.description || 'Jednoduchy recept pripraveny pre BASIL kuchynu.'}</p>
+        <div class="meta-row">
+          <span>${time ? `${time} min` : 'Cas nezadany'}</span>
+          <span>${recipe.servings ? `${recipe.servings} porcie` : 'Porcie nezadane'}</span>
+        </div>
+      </div>
+    </a>
+  `;
+}
+
+function renderEmpty(target, message) {
+  target.innerHTML = `<p class="empty-state">${message}</p>`;
+}
+
+async function loadPublishedRecipes() {
+  const { data, error } = await supabase
+    .from('recipes')
+    .select('id,title,description,image_url,servings,prep_time_minutes,cook_time_minutes,difficulty,created_at')
+    .eq('is_published', true)
+    .order('created_at', { ascending: false })
+    .limit(12);
+
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+async function loadIngredientTags(recipes) {
+  if (recipes.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('recipe_ingredients')
+    .select('name,normalized_name,recipe_id')
+    .in(
+      'recipe_id',
+      recipes.map((recipe) => recipe.id),
+    );
+
+  if (error) throw error;
+
+  const counts = new Map();
+  for (const item of data || []) {
+    const key = item.normalized_name || normalizeIngredientName(item.name);
+    const existing = counts.get(key) || { name: item.name, count: 0 };
+    counts.set(key, { name: existing.name, count: existing.count + 1 });
+  }
+
+  return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 12);
+}
+
+function renderPublicHome(recipes, tags) {
+  const newRecipes = document.querySelector('#new-recipes');
+  const popularRecipes = document.querySelector('#popular-recipes');
+  const ingredientTags = document.querySelector('#ingredient-tags');
+
+  if (recipes.length === 0) {
+    renderEmpty(newRecipes, 'Zatial tu nie su publikovane recepty.');
+    renderEmpty(popularRecipes, 'Popularne recepty sa zobrazia po publikovani.');
+  } else {
+    newRecipes.innerHTML = recipes.slice(0, 6).map(renderRecipeCard).join('');
+    popularRecipes.innerHTML = recipes.slice(0, 3).map(renderRecipeCard).join('');
+  }
+
+  if (tags.length === 0) {
+    renderEmpty(ingredientTags, 'Suroviny sa zobrazia po doplneni receptov.');
+  } else {
+    ingredientTags.innerHTML = tags
+      .map((tag) => `<button type="button" class="tag-button" data-ingredient="${tag.name}">${tag.name}</button>`)
+      .join('');
+  }
+}
+
+function bindIngredientSearch(recipes) {
+  const form = document.querySelector('#ingredient-search');
+  const target = document.querySelector('#new-recipes');
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const query = normalizeIngredientName(new FormData(form).get('ingredient'));
+    if (!query) {
+      target.innerHTML = recipes.slice(0, 6).map(renderRecipeCard).join('');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('recipe_ingredients')
+      .select('recipe_id')
+      .ilike('normalized_name', `%${query}%`);
+
+    if (error) {
+      setStatus(error.message);
+      return;
+    }
+
+    const matchingIds = new Set((data || []).map((row) => row.recipe_id));
+    const matchingRecipes = recipes.filter((recipe) => matchingIds.has(recipe.id));
+
+    if (matchingRecipes.length === 0) {
+      renderEmpty(target, 'Pre tuto surovinu zatial nemame recept.');
+      return;
+    }
+
+    target.innerHTML = matchingRecipes.map(renderRecipeCard).join('');
+  });
+}
+
+async function loadUserHomeData(session) {
+  const [{ data: profile }, { data: households, error: householdError }, recipes] = await Promise.all([
+    supabase.from('profiles').select('display_name,handle,email').eq('id', session.user.id).maybeSingle(),
+    supabase.from('households').select('id,name,created_at').order('created_at', { ascending: true }),
+    loadPublishedRecipes(),
+  ]);
+
+  if (householdError) throw householdError;
+
+  return {
+    profile,
+    households: Array.isArray(households) ? households : [],
+    recipes,
+  };
+}
+
+async function loadHouseholdLists(householdId) {
+  const { data: lists, error: listsError } = await supabase
+    .from('lists')
+    .select('id,type,name,is_default')
+    .eq('household_id', householdId);
+
+  if (listsError) throw listsError;
+
+  const inventoryList = (lists || []).find((list) => list.type === 'inventory' && list.is_default) || (lists || []).find((list) => list.type === 'inventory');
+  const shoppingList = (lists || []).find((list) => list.type === 'shopping' && list.is_default) || (lists || []).find((list) => list.type === 'shopping');
+  const listIds = [inventoryList?.id, shoppingList?.id].filter(Boolean);
+
+  if (listIds.length === 0) {
+    return { inventoryItems: [], shoppingItems: [] };
+  }
+
+  const { data: items, error: itemsError } = await supabase
+    .from('list_items')
+    .select('id,list_id,name,quantity,unit,expiry_date,min_stock,status')
+    .in('list_id', listIds)
+    .neq('status', 'archived')
+    .order('updated_at', { ascending: false });
+
+  if (itemsError) throw itemsError;
+
+  return {
+    inventoryItems: (items || []).filter((item) => item.list_id === inventoryList?.id),
+    shoppingItems: (items || []).filter((item) => item.list_id === shoppingList?.id && item.status !== 'checked'),
+  };
+}
+
+function renderList(target, rows, emptyMessage) {
+  if (rows.length === 0) {
+    renderEmpty(target, emptyMessage);
+    return;
+  }
+
+  target.innerHTML = rows
+    .map(
+      (item) => `
+        <article class="data-row">
+          <div>
+            <strong>${item.name}</strong>
+            <span>${item.expiry_date || item.status || ''}</span>
+          </div>
+          <span>${formatQuantity(item)}</span>
+        </article>
+      `,
+    )
+    .join('');
+}
+
+function renderMatchedRecipes(recipes, inventoryItems) {
+  const target = document.querySelector('#matched-recipes');
+  const inventoryNames = new Set(inventoryItems.map((item) => normalizeIngredientName(item.name)));
+
+  if (recipes.length === 0) {
+    renderEmpty(target, 'Publikovane recepty sa zobrazia tu.');
+    return;
+  }
+
+  const shown = recipes.slice(0, 3).map((recipe) => {
+    const titleWords = normalizeIngredientName(recipe.title).split(/\s+/).filter(Boolean);
+    const roughMatch = titleWords.some((word) => inventoryNames.has(word)) ? 90 : 70;
+    return { ...recipe, roughMatch };
+  });
+
+  target.innerHTML = shown
+    .map(
+      (recipe) => `
+        <a class="recipe-mini" href="/recipes/?id=${encodeURIComponent(recipe.id)}">
+          <strong>${recipe.title}</strong>
+          <span>${recipe.roughMatch}% zhoda</span>
+        </a>
+      `,
+    )
+    .join('');
+}
+
+async function renderDashboardForHousehold(householdId, recipes) {
+  const { inventoryItems, shoppingItems } = await loadHouseholdLists(householdId);
+  const expiringItems = inventoryItems
+    .map((item) => ({ ...item, days: daysUntil(item.expiry_date) }))
+    .filter((item) => item.days !== null && item.days >= 0 && item.days <= 5)
+    .sort((a, b) => a.days - b.days);
+  const lowStockItems = inventoryItems.filter((item) => item.min_stock !== null && Number(item.quantity) < Number(item.min_stock));
+
+  document.querySelector('#inventory-count').textContent = String(inventoryItems.length);
+  document.querySelector('#expiring-count').textContent = String(expiringItems.length);
+  document.querySelector('#shopping-count').textContent = String(shoppingItems.length);
+
+  renderList(document.querySelector('#expiring-items'), expiringItems.slice(0, 6), 'Nic neexpiruje v najblizsich 5 dnoch.');
+  renderList(document.querySelector('#shopping-items'), shoppingItems.slice(0, 6), 'Nakupny zoznam je prazdny.');
+  renderList(document.querySelector('#low-stock-items'), lowStockItems.slice(0, 6), 'Ziadne minajuce sa polozky.');
+  renderMatchedRecipes(recipes, inventoryItems);
+}
+
+async function renderDashboard(session) {
+  const { profile, households, recipes } = await loadUserHomeData(session);
+  const displayName = profile?.display_name || profile?.handle || session.user.email || 'BASIL user';
+
+  document.querySelector('#dashboard-title').textContent = `Vitaj, ${displayName}`;
+  loginLink.hidden = true;
+  logoutButton.hidden = false;
+  authLinks.forEach((link) => {
+    link.hidden = false;
+  });
+
+  if (households.length === 0) {
+    householdSelect.innerHTML = '<option>Ziadna domacnost</option>';
+    setStatus('Zatial nemas dostupnu domacnost.');
+    return;
+  }
+
+  householdSelect.innerHTML = households.map((household) => `<option value="${household.id}">${household.name}</option>`).join('');
+
+  const storedActiveId = localStorage.getItem(ACTIVE_HOUSEHOLD_KEY);
+  const activeHousehold = households.find((household) => household.id === storedActiveId) || households[0];
+  householdSelect.value = activeHousehold.id;
+  document.querySelector('#dashboard-subtitle').textContent = `Prehlad pre domacnost ${activeHousehold.name}.`;
+
+  householdSelect.addEventListener('change', async () => {
+    const nextId = householdSelect.value;
+    const nextHousehold = households.find((household) => household.id === nextId);
+    localStorage.setItem(ACTIVE_HOUSEHOLD_KEY, nextId);
+    document.querySelector('#dashboard-subtitle').textContent = `Prehlad pre domacnost ${nextHousehold?.name || 'domacnost'}.`;
+    await renderDashboardForHousehold(nextId, recipes);
+  });
+
+  await renderDashboardForHousehold(activeHousehold.id, recipes);
+}
+
+async function init() {
+  if (!hasSupabaseConfig()) {
+    publicHome.hidden = false;
+    setStatus('Chyba Supabase URL alebo anon key.');
+    return;
+  }
+
+  const { data } = await supabase.auth.getSession();
+  const session = data.session;
+
+  authLinks.forEach((link) => {
+    link.hidden = !session;
+  });
+
+  try {
+    const recipes = await loadPublishedRecipes();
+    const tags = await loadIngredientTags(recipes);
+
+    if (!session) {
+      publicHome.hidden = false;
+      renderPublicHome(recipes, tags);
+      bindIngredientSearch(recipes);
+      return;
+    }
+
+    dashboardHome.hidden = false;
+    await renderDashboard(session);
+  } catch (error) {
+    setStatus(error.message);
+    publicHome.hidden = !session;
+    dashboardHome.hidden = Boolean(session) ? false : dashboardHome.hidden;
+  }
+}
+
+logoutButton.addEventListener('click', async () => {
+  await supabase.auth.signOut();
+  window.location.href = '/';
+});
+
+init();

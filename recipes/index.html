@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="sk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recept</title>
+    <link rel="stylesheet" href="/assets/admin.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="/">
+          <span class="brand-mark">B</span>
+          <span>BASIL recepty</span>
+        </a>
+        <nav class="nav-actions">
+          <a href="/">Domov</a>
+          <a href="/admin/recipes/new" data-auth-link hidden>Novy recept</a>
+          <a href="/login" data-login-link>Prihlasenie</a>
+          <button type="button" id="detail-logout" hidden>Odhlasit sa</button>
+        </nav>
+      </header>
+
+      <article id="recipe-detail" hidden>
+        <section class="recipe-detail-hero">
+          <img id="recipe-image" alt="" />
+          <div>
+            <p id="recipe-status" class="eyebrow"></p>
+            <h1 id="recipe-title"></h1>
+            <p id="recipe-description" class="lead"></p>
+            <div id="recipe-meta" class="meta-row"></div>
+          </div>
+        </section>
+
+        <div class="recipe-detail-grid">
+          <section class="panel">
+            <div class="section-title">
+              <div>
+                <p class="eyebrow">Suroviny</p>
+                <h2>Co potrebujes</h2>
+              </div>
+            </div>
+            <div id="recipe-ingredients" class="list-stack"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-title">
+              <div>
+                <p class="eyebrow">Postup</p>
+                <h2>Ako sa robi</h2>
+              </div>
+            </div>
+            <ol id="recipe-steps" class="steps-list"></ol>
+          </section>
+        </div>
+      </article>
+
+      <p id="detail-message" class="status-line" role="status">Nacitavam recept...</p>
+    </main>
+
+    <script src="/assets/env.js"></script>
+    <script type="module" src="/assets/recipe-detail.js"></script>
+  </body>
+</html>

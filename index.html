@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="sk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BASIL recepty</title>
+    <link rel="stylesheet" href="/assets/admin.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="/">
+          <span class="brand-mark">B</span>
+          <span>BASIL recepty</span>
+        </a>
+        <nav class="nav-actions">
+          <a href="/admin/recipes/new" data-auth-link>Novy recept</a>
+          <a href="/login" data-login-link>Prihlasenie</a>
+          <button type="button" id="home-logout" hidden>Odhlasit sa</button>
+        </nav>
+      </header>
+
+      <section id="public-home" hidden>
+        <section class="home-hero public-hero">
+          <div>
+            <p class="eyebrow">Recepty pre tvoju kuchynu</p>
+            <h1>Var z toho, co mas doma.</h1>
+            <p class="lead">
+              Objav nove recepty, rychle napady a inspiraciu podla surovin, ktore sa daju neskor napojit na BASIL inventar.
+            </p>
+          </div>
+          <form id="ingredient-search" class="search-panel">
+            <label>
+              <span>Najst podla suroviny</span>
+              <input name="ingredient" type="search" placeholder="napr. paradajka, ryza, syr" />
+            </label>
+            <button type="submit" class="primary">Hladat</button>
+          </form>
+        </section>
+
+        <section class="section-block">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Cerste pridane</p>
+              <h2>Nove recepty</h2>
+            </div>
+          </div>
+          <div id="new-recipes" class="recipe-grid"></div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Popularne</p>
+              <h2>Najstahovanejsie</h2>
+            </div>
+          </div>
+          <div id="popular-recipes" class="recipe-grid compact"></div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Suroviny</p>
+              <h2>Podla surovin</h2>
+            </div>
+          </div>
+          <div id="ingredient-tags" class="tag-cloud"></div>
+        </section>
+      </section>
+
+      <section id="dashboard-home" hidden>
+        <section class="home-hero dashboard-hero">
+          <div>
+            <p class="eyebrow">BASIL dashboard</p>
+            <h1 id="dashboard-title">Vitaj spat</h1>
+            <p id="dashboard-subtitle" class="lead">Prehlad tvojej domacnosti, inventara a nakupneho zoznamu.</p>
+          </div>
+          <label class="household-picker">
+            <span>Domacnost</span>
+            <select id="household-select"></select>
+          </label>
+        </section>
+
+        <section class="stats-grid">
+          <article class="stat-panel">
+            <span class="stat-label">Inventar</span>
+            <strong id="inventory-count">0</strong>
+          </article>
+          <article class="stat-panel">
+            <span class="stat-label">Expiruje do 5 dni</span>
+            <strong id="expiring-count">0</strong>
+          </article>
+          <article class="stat-panel">
+            <span class="stat-label">Nakupny zoznam</span>
+            <strong id="shopping-count">0</strong>
+          </article>
+        </section>
+
+        <div class="dashboard-grid">
+          <section class="panel">
+            <div class="section-title">
+              <div>
+                <p class="eyebrow">Inventar</p>
+                <h2>Najblizsie expiruje</h2>
+              </div>
+            </div>
+            <div id="expiring-items" class="list-stack"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-title">
+              <div>
+                <p class="eyebrow">Nakup</p>
+                <h2>Aktualny zoznam</h2>
+              </div>
+            </div>
+            <div id="shopping-items" class="list-stack"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-title">
+              <div>
+                <p class="eyebrow">Zasoby</p>
+                <h2>Minajuce sa polozky</h2>
+              </div>
+            </div>
+            <div id="low-stock-items" class="list-stack"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-title">
+              <div>
+                <p class="eyebrow">Recepty</p>
+                <h2>Odporucane</h2>
+              </div>
+            </div>
+            <div id="matched-recipes" class="recipe-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <p id="home-status" class="status-line" role="status"></p>
+    </main>
+
+    <script src="/assets/env.js"></script>
+    <script type="module" src="/assets/home.js"></script>
+  </body>
+</html>

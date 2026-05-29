@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="sk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prihlasenie</title>
+    <link rel="stylesheet" href="/assets/admin.css" />
+  </head>
+  <body>
+    <main class="page-shell auth-shell">
+      <section class="panel auth-panel">
+        <p class="eyebrow">Recipe web</p>
+        <h1>Prihlasenie</h1>
+
+        <form id="login-form" class="form-stack">
+          <label>
+            <span>Email</span>
+            <input name="email" type="email" autocomplete="email" required />
+          </label>
+
+          <label>
+            <span>Heslo</span>
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+
+          <footer class="actions">
+            <p id="status-message" role="status"></p>
+            <button type="submit" class="primary">Prihlasit sa</button>
+          </footer>
+        </form>
+      </section>
+    </main>
+
+    <script src="/assets/env.js"></script>
+    <script type="module" src="/assets/login.js"></script>
+  </body>
+</html>
