@@ -1,14 +1,22 @@
 import { hasSupabaseConfig, supabase } from './supabase-client.js';
+import { renderUserMenu } from './user-menu.js';
 
 const publicHome = document.querySelector('#public-home');
 const dashboardHome = document.querySelector('#dashboard-home');
 const statusLine = document.querySelector('#home-status');
-const logoutButton = document.querySelector('#home-logout');
 const loginLink = document.querySelector('[data-login-link]');
 const authLinks = [...document.querySelectorAll('[data-auth-link]')];
+const appNav = document.querySelector('[data-app-nav]');
 const householdSelect = document.querySelector('#household-select');
+const dashboardRecipesPanel = document.querySelector('#dashboard-recipes-panel');
+const dashboardInventoryPanel = document.querySelector('#dashboard-inventory-panel');
+const dashboardShoppingPanel = document.querySelector('#dashboard-shopping-panel');
+const dashboardInventoryStat = document.querySelector('#dashboard-inventory-stat');
+const dashboardExpiringStat = document.querySelector('#dashboard-expiring-stat');
+const dashboardShoppingStat = document.querySelector('#dashboard-shopping-stat');
 
 const ACTIVE_HOUSEHOLD_KEY = 'recipe_web_active_household_id';
+const INGREDIENT_ALIASES_KEY = 'recipe_web_recipe_ingredient_aliases_v1';
 
 function setStatus(message) {
   statusLine.textContent = message || '';
@@ -36,6 +44,15 @@ function normalizeIngredientName(value) {
     .trim()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
+}
+
+function loadAllIngredientAliases() {
+  try {
+    const map = JSON.parse(localStorage.getItem(INGREDIENT_ALIASES_KEY) || '{}');
+    return map && typeof map === 'object' ? map : {};
+  } catch {
+    return {};
+  }
 }
 
 function renderRecipeCard(recipe) {
@@ -67,7 +84,10 @@ function renderEmpty(target, message) {
 async function loadPublishedRecipes() {
   const { data, error } = await supabase
     .from('recipes')
-    .select('id,title,description,image_url,servings,prep_time_minutes,cook_time_minutes,difficulty,created_at')
+    .select(`
+      id,title,description,image_url,servings,prep_time_minutes,cook_time_minutes,difficulty,created_at,
+      recipe_ingredients(id,name,normalized_name,optional,sort_order)
+    `)
     .eq('is_published', true)
     .order('created_at', { ascending: false })
     .limit(12);
@@ -158,7 +178,7 @@ function bindIngredientSearch(recipes) {
 
 async function loadUserHomeData(session) {
   const [{ data: profile }, { data: households, error: householdError }, recipes] = await Promise.all([
-    supabase.from('profiles').select('display_name,handle,email').eq('id', session.user.id).maybeSingle(),
+    supabase.from('profiles').select('display_name,handle,email,avatar_url').eq('id', session.user.id).maybeSingle(),
     supabase.from('households').select('id,name,created_at').order('created_at', { ascending: true }),
     loadPublishedRecipes(),
   ]);
@@ -227,28 +247,65 @@ function renderList(target, rows, emptyMessage) {
 function renderMatchedRecipes(recipes, inventoryItems) {
   const target = document.querySelector('#matched-recipes');
   const inventoryNames = new Set(inventoryItems.map((item) => normalizeIngredientName(item.name)));
+  const aliasesByRecipe = loadAllIngredientAliases();
 
   if (recipes.length === 0) {
     renderEmpty(target, 'Publikovane recepty sa zobrazia tu.');
     return;
   }
 
-  const shown = recipes.slice(0, 3).map((recipe) => {
-    const titleWords = normalizeIngredientName(recipe.title).split(/\s+/).filter(Boolean);
-    const roughMatch = titleWords.some((word) => inventoryNames.has(word)) ? 90 : 70;
-    return { ...recipe, roughMatch };
-  });
+  const shown = recipes
+    .map((recipe) => {
+      const ingredients = Array.isArray(recipe.recipe_ingredients) ? recipe.recipe_ingredients : [];
+      const required = ingredients.filter((ingredient) => !ingredient.optional);
+      const relevant = required.length ? required : ingredients;
+      const base = relevant.length || 1;
+      const aliases = aliasesByRecipe?.[recipe.id] || {};
+      const matchedCount = relevant.filter((ingredient) => {
+        const directName = ingredient.normalized_name || normalizeIngredientName(ingredient.name);
+        const aliasName = aliases[ingredient.id];
+        return inventoryNames.has(directName) ||
+          (aliasName && inventoryNames.has(normalizeIngredientName(aliasName)));
+      }).length;
+
+      return {
+        ...recipe,
+        matchPercent: Math.round((matchedCount / base) * 100),
+        matchedCount,
+      };
+    })
+    .sort((a, b) => {
+      if (b.matchPercent !== a.matchPercent) return b.matchPercent - a.matchPercent;
+      return b.matchedCount - a.matchedCount;
+    })
+    .slice(0, 3);
 
   target.innerHTML = shown
     .map(
       (recipe) => `
         <a class="recipe-mini" href="/recipes/?id=${encodeURIComponent(recipe.id)}">
           <strong>${recipe.title}</strong>
-          <span>${recipe.roughMatch}% zhoda</span>
+          <span>${recipe.matchPercent}% zhoda</span>
         </a>
       `,
     )
     .join('');
+}
+
+function openRecipesPage() {
+  window.location.href = '/recipes/';
+}
+
+function openInventoryPage() {
+  window.location.href = '/inventory/';
+}
+
+function openInventoryByExpiryPage() {
+  window.location.href = '/inventory/?sort=expiry';
+}
+
+function openShoppingPage() {
+  window.location.href = '/shopping/';
 }
 
 async function renderDashboardForHousehold(householdId, recipes) {
@@ -274,8 +331,8 @@ async function renderDashboard(session) {
   const displayName = profile?.display_name || profile?.handle || session.user.email || 'BASIL user';
 
   document.querySelector('#dashboard-title').textContent = `Vitaj, ${displayName}`;
+  renderUserMenu({ profile: profile || { email: session.user.email }, user: session.user });
   loginLink.hidden = true;
-  logoutButton.hidden = false;
   authLinks.forEach((link) => {
     link.hidden = false;
   });
@@ -330,6 +387,7 @@ async function init() {
     }
 
     dashboardHome.hidden = false;
+    appNav.hidden = false;
     await renderDashboard(session);
   } catch (error) {
     setStatus(error.message);
@@ -338,9 +396,65 @@ async function init() {
   }
 }
 
-logoutButton.addEventListener('click', async () => {
-  await supabase.auth.signOut();
-  window.location.href = '/';
+dashboardRecipesPanel?.addEventListener('click', (event) => {
+  if (event.target.closest('a')) return;
+  openRecipesPage();
+});
+
+dashboardRecipesPanel?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    openRecipesPage();
+  }
+});
+
+dashboardInventoryPanel?.addEventListener('click', (event) => {
+  if (event.target.closest('a')) return;
+  openInventoryByExpiryPage();
+});
+
+dashboardInventoryPanel?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    openInventoryByExpiryPage();
+  }
+});
+
+dashboardShoppingPanel?.addEventListener('click', (event) => {
+  if (event.target.closest('a')) return;
+  openShoppingPage();
+});
+
+dashboardShoppingPanel?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    openShoppingPage();
+  }
+});
+
+dashboardInventoryStat?.addEventListener('click', openInventoryPage);
+dashboardExpiringStat?.addEventListener('click', openInventoryByExpiryPage);
+dashboardShoppingStat?.addEventListener('click', openShoppingPage);
+
+dashboardInventoryStat?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    openInventoryPage();
+  }
+});
+
+dashboardShoppingStat?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    openShoppingPage();
+  }
+});
+
+dashboardExpiringStat?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    openInventoryByExpiryPage();
+  }
 });
 
 init();

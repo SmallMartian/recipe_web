@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="sk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nakupny zoznam</title>
+    <link rel="stylesheet" href="/assets/admin.css" />
+  </head>
+  <body>
+    <main class="page-shell list-screen" data-list-type="shopping">
+      <header class="site-header">
+        <a class="brand" href="/">
+          <span class="brand-mark">B</span>
+          <span>BASIL nakup</span>
+        </a>
+        <nav class="nav-actions">
+          <div class="profile-menu-wrap" data-user-menu hidden></div>
+        </nav>
+      </header>
+      <nav class="app-rail" data-app-nav>
+        <a href="/" data-nav="dashboard" aria-label="Dashboard"><span><ion-icon name="home-outline"></ion-icon></span><strong>Domov</strong></a>
+        <a href="/inventory/" data-nav="inventory" aria-label="Inventar"><span><ion-icon name="leaf-outline"></ion-icon></span><strong>Inventar</strong></a>
+        <a href="/shopping/" data-nav="shopping" class="is-active" aria-label="Nakup"><span><ion-icon name="basket-outline"></ion-icon></span><strong>Nakup</strong></a>
+        <a href="/recipes/" data-nav="recipes" aria-label="Recepty"><span><ion-icon name="restaurant-outline"></ion-icon></span><strong>Recepty</strong></a>
+      </nav>
+
+      <section class="home-hero">
+        <div>
+          <p class="eyebrow">Nakupny zoznam</p>
+          <h1>Co treba dokupit</h1>
+          <p class="lead">Rovnaky nakupny zoznam ako v mobilnej appke, napojeny na aktivnu domacnost.</p>
+        </div>
+        <label class="household-picker">
+          <span>Domacnost</span>
+          <select id="list-household-select"></select>
+        </label>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">Nova polozka</p>
+            <h2>Pridat do nakupu</h2>
+          </div>
+        </div>
+        <form id="list-item-form" class="list-form">
+          <label>
+            <span>Nazov</span>
+            <input name="name" type="text" required />
+          </label>
+          <label>
+            <span>Mnozstvo</span>
+            <input name="quantity" type="number" min="0" step="0.001" value="1" />
+          </label>
+          <label>
+            <span>Jednotka</span>
+            <select name="unit">
+              <option value="pcs">pcs</option>
+              <option value="g">g</option>
+              <option value="dkg">dkg</option>
+              <option value="kg">kg</option>
+              <option value="ml">ml</option>
+              <option value="l">l</option>
+            </select>
+          </label>
+          <button type="submit" class="primary">Pridat</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">Polozky</p>
+            <h2>Aktualny nakup</h2>
+          </div>
+          <div class="toolbar-actions">
+            <button type="button" id="refresh-list">Obnovit</button>
+          </div>
+        </div>
+        <div id="list-items" class="item-table"></div>
+      </section>
+
+      <p id="list-status" class="status-line" role="status"></p>
+    </main>
+
+    <script type="module" src="https://unpkg.com/ionicons@7.4.0/dist/ionicons/ionicons.esm.js"></script>
+    <script src="/assets/env.js"></script>
+    <script type="module" src="/assets/list-screen.js"></script>
+  </body>
+</html>

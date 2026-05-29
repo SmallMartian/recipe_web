@@ -14,12 +14,60 @@
           <span>BASIL recepty</span>
         </a>
         <nav class="nav-actions">
-          <a href="/">Domov</a>
           <a href="/admin/recipes/new" data-auth-link hidden>Novy recept</a>
-          <a href="/login" data-login-link>Prihlasenie</a>
-          <button type="button" id="detail-logout" hidden>Odhlasit sa</button>
+          <div class="profile-menu-wrap" data-user-menu hidden></div>
+          <a class="login-button" href="/login" data-login-link>
+            <ion-icon name="person-circle-outline"></ion-icon>
+            <span>Prihlasenie</span>
+          </a>
         </nav>
       </header>
+      <nav class="app-rail" data-app-nav hidden>
+        <a href="/" data-nav="dashboard" aria-label="Dashboard"><span><ion-icon name="home-outline"></ion-icon></span><strong>Domov</strong></a>
+        <a href="/inventory/" data-nav="inventory" aria-label="Inventar"><span><ion-icon name="leaf-outline"></ion-icon></span><strong>Inventar</strong></a>
+        <a href="/shopping/" data-nav="shopping" aria-label="Nakup"><span><ion-icon name="basket-outline"></ion-icon></span><strong>Nakup</strong></a>
+        <a href="/recipes/" data-nav="recipes" class="is-active" aria-label="Recepty"><span><ion-icon name="restaurant-outline"></ion-icon></span><strong>Recepty</strong></a>
+      </nav>
+
+      <section id="recipes-browse" hidden>
+        <section class="home-hero public-hero">
+          <div>
+            <p class="eyebrow">Recepty</p>
+            <h1>Najdi nieco dobre.</h1>
+            <p class="lead">
+              Prezeraj publikovane recepty, hladaj podla surovin a po prihlaseni si ukladaj oblubene recepty do BASIL uctu.
+            </p>
+          </div>
+          <form id="recipes-search" class="search-panel">
+            <label>
+              <span>Najst podla suroviny</span>
+              <input name="ingredient" type="search" placeholder="napr. zemiaky, vajcia, syr" />
+            </label>
+            <button type="submit" class="primary">Hladat</button>
+          </form>
+        </section>
+
+        <section id="my-recipes-section" class="section-block" hidden>
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Tvoj BASIL</p>
+              <h2>Moje recepty</h2>
+            </div>
+            <a class="button-link primary" href="/admin/recipes/new">Novy recept</a>
+          </div>
+          <div id="my-recipes" class="recipe-grid"></div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Kuchyna</p>
+              <h2>Vsetky recepty</h2>
+            </div>
+          </div>
+          <div id="all-recipes" class="recipe-grid"></div>
+        </section>
+      </section>
 
       <article id="recipe-detail" hidden>
         <section class="recipe-detail-hero">
@@ -29,6 +77,7 @@
             <h1 id="recipe-title"></h1>
             <p id="recipe-description" class="lead"></p>
             <div id="recipe-meta" class="meta-row"></div>
+            <button type="button" id="save-recipe-button" class="primary save-button" hidden>Ulozit recept</button>
           </div>
         </section>
 
@@ -58,6 +107,7 @@
       <p id="detail-message" class="status-line" role="status">Nacitavam recept...</p>
     </main>
 
+    <script type="module" src="https://unpkg.com/ionicons@7.4.0/dist/ionicons/ionicons.esm.js"></script>
     <script src="/assets/env.js"></script>
     <script type="module" src="/assets/recipe-detail.js"></script>
   </body>

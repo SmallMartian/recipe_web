@@ -27,7 +27,24 @@ Prihlasenie je na:
 http://localhost:5174/login
 ```
 
-Admin formular je po prihlaseni na:
+Stranka receptov je na:
+
+```text
+http://localhost:5174/recipes/
+```
+
+Prihlaseny user tam vidi sekciu `Moje recepty` pre vlastne a ulozene recepty. Tlacidlo na vytvorenie receptu je v tejto sekcii.
+
+Inventar a nakupny zoznam su na:
+
+```text
+http://localhost:5174/inventory/
+http://localhost:5174/shopping/
+```
+
+Tieto obrazovky citaju a zapisuju existujuce BASIL cloud tabulky `households`, `lists` a `list_items`, takze pouzivatel vidi rovnake polozky ako v mobilnej appke.
+
+Admin formular je na:
 
 ```text
 http://localhost:5174/admin/recipes/new

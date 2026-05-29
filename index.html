@@ -14,11 +14,19 @@
           <span>BASIL recepty</span>
         </a>
         <nav class="nav-actions">
-          <a href="/admin/recipes/new" data-auth-link>Novy recept</a>
-          <a href="/login" data-login-link>Prihlasenie</a>
-          <button type="button" id="home-logout" hidden>Odhlasit sa</button>
+          <div class="profile-menu-wrap" data-user-menu hidden></div>
+          <a class="login-button" href="/login" data-login-link>
+            <ion-icon name="person-circle-outline"></ion-icon>
+            <span>Prihlasenie</span>
+          </a>
         </nav>
       </header>
+      <nav class="app-rail" data-app-nav hidden>
+        <a href="/" data-nav="dashboard" class="is-active" aria-label="Dashboard"><span><ion-icon name="home-outline"></ion-icon></span><strong>Domov</strong></a>
+        <a href="/inventory/" data-nav="inventory" aria-label="Inventar"><span><ion-icon name="leaf-outline"></ion-icon></span><strong>Inventar</strong></a>
+        <a href="/shopping/" data-nav="shopping" aria-label="Nakup"><span><ion-icon name="basket-outline"></ion-icon></span><strong>Nakup</strong></a>
+        <a href="/recipes/" data-nav="recipes" aria-label="Recepty"><span><ion-icon name="restaurant-outline"></ion-icon></span><strong>Recepty</strong></a>
+      </nav>
 
       <section id="public-home" hidden>
         <section class="home-hero public-hero">
@@ -83,22 +91,22 @@
         </section>
 
         <section class="stats-grid">
-          <article class="stat-panel">
+          <article id="dashboard-inventory-stat" class="stat-panel clickable-panel" role="link" tabindex="0">
             <span class="stat-label">Inventar</span>
             <strong id="inventory-count">0</strong>
           </article>
-          <article class="stat-panel">
+          <article id="dashboard-expiring-stat" class="stat-panel clickable-panel" role="link" tabindex="0">
             <span class="stat-label">Expiruje do 5 dni</span>
             <strong id="expiring-count">0</strong>
           </article>
-          <article class="stat-panel">
+          <article id="dashboard-shopping-stat" class="stat-panel clickable-panel" role="link" tabindex="0">
             <span class="stat-label">Nakupny zoznam</span>
             <strong id="shopping-count">0</strong>
           </article>
         </section>
 
         <div class="dashboard-grid">
-          <section class="panel">
+          <section id="dashboard-inventory-panel" class="panel clickable-panel" role="link" tabindex="0">
             <div class="section-title">
               <div>
                 <p class="eyebrow">Inventar</p>
@@ -108,7 +116,7 @@
             <div id="expiring-items" class="list-stack"></div>
           </section>
 
-          <section class="panel">
+          <section id="dashboard-shopping-panel" class="panel clickable-panel" role="link" tabindex="0">
             <div class="section-title">
               <div>
                 <p class="eyebrow">Nakup</p>
@@ -128,7 +136,7 @@
             <div id="low-stock-items" class="list-stack"></div>
           </section>
 
-          <section class="panel">
+          <section id="dashboard-recipes-panel" class="panel clickable-panel" role="link" tabindex="0">
             <div class="section-title">
               <div>
                 <p class="eyebrow">Recepty</p>
@@ -143,6 +151,7 @@
       <p id="home-status" class="status-line" role="status"></p>
     </main>
 
+    <script type="module" src="https://unpkg.com/ionicons@7.4.0/dist/ionicons/ionicons.esm.js"></script>
     <script src="/assets/env.js"></script>
     <script type="module" src="/assets/home.js"></script>
   </body>

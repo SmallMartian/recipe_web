@@ -12,7 +12,7 @@ async function redirectIfSignedIn() {
   const { data } = await supabase.auth.getSession();
 
   if (data.session) {
-    window.location.href = '/admin/recipes/new';
+    window.location.href = '/';
   }
 }
 
@@ -40,7 +40,7 @@ async function handleSubmit(event) {
     return;
   }
 
-  window.location.href = '/admin/recipes/new';
+  window.location.href = '/';
 }
 
 form.addEventListener('submit', handleSubmit);

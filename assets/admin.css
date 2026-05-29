@@ -40,6 +40,10 @@ textarea {
   padding: 32px 0;
 }
 
+body:has(.app-rail:not([hidden])) .page-shell {
+  padding-left: 112px;
+}
+
 .site-header,
 .page-header {
   display: flex;
@@ -76,9 +80,111 @@ textarea {
   flex-wrap: wrap;
 }
 
-.nav-actions a {
+.app-rail {
+  position: fixed;
+  z-index: 15;
+  left: 18px;
+  top: 50%;
+  display: grid;
+  gap: 10px;
+  width: 74px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: 0 16px 34px var(--shadow);
+  transform: translateY(-50%);
+}
+
+.app-rail[hidden] {
+  display: none;
+}
+
+.app-rail a {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  min-height: 58px;
+  border-radius: 999px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.app-rail span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-alt);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.app-rail ion-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.app-rail strong {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.app-rail a:hover,
+.app-rail a:focus-visible,
+.app-rail a.is-active {
+  background: var(--accent-soft);
+  color: var(--text);
+  outline: none;
+}
+
+.app-rail a.is-active span {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--panel);
+}
+
+.nav-actions a,
+.button-link {
   color: var(--text);
   text-decoration: none;
+}
+
+.login-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 12px 8px 9px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px var(--shadow);
+  font-weight: 700;
+}
+
+.login-button ion-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--accent-dark);
+}
+
+.login-button:hover,
+.login-button:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 10px 12px;
+  background: var(--panel);
 }
 
 .eyebrow {
@@ -114,6 +220,18 @@ h2 {
   border-radius: 28px;
   padding: 20px;
   box-shadow: 0 10px 28px var(--shadow);
+}
+
+.clickable-panel {
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease;
+}
+
+.clickable-panel:hover,
+.clickable-panel:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  transform: translateY(-2px);
 }
 
 .grid {
@@ -174,6 +292,24 @@ textarea {
   margin-bottom: 12px;
 }
 
+.toolbar-actions {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.inline-control {
+  display: grid;
+  gap: 5px;
+  margin-top: 0;
+}
+
+.inline-control select {
+  min-width: 190px;
+  padding-block: 10px;
+}
+
 .rows {
   display: grid;
   gap: 10px;
@@ -224,6 +360,140 @@ button:hover {
 
 .remove {
   color: var(--danger);
+}
+
+.user-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 240px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: var(--panel-alt);
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-menu-wrap {
+  position: relative;
+}
+
+.profile-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 280px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px 6px 6px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px var(--shadow);
+}
+
+.profile-badge:hover,
+.profile-badge:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.profile-avatar,
+.profile-avatar img,
+.profile-initial {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+}
+
+.profile-avatar {
+  display: inline-grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--accent-soft);
+  flex: 0 0 auto;
+}
+
+.profile-avatar img {
+  display: block;
+  object-fit: cover;
+}
+
+.profile-initial {
+  display: inline-grid;
+  place-items: center;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.profile-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.profile-copy strong,
+.profile-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-copy strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.profile-copy small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.profile-chevron {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  padding-left: 2px;
+}
+
+.profile-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  min-width: 220px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: 0 16px 34px var(--shadow);
+}
+
+.profile-menu[hidden] {
+  display: none;
+}
+
+.profile-menu a,
+.profile-menu button {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 12px 14px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  text-decoration: none;
+  box-shadow: none;
+}
+
+.profile-menu a:hover,
+.profile-menu button:hover,
+.profile-menu a:focus-visible,
+.profile-menu button:focus-visible {
+  background: var(--input);
+  outline: none;
 }
 
 .actions {
@@ -345,6 +615,19 @@ button:hover {
   font-size: 18px;
 }
 
+.card-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .recipe-card p {
   margin: 0;
   color: var(--muted);
@@ -438,6 +721,116 @@ button:hover {
   gap: 4px;
 }
 
+.ingredient-row {
+  cursor: default;
+}
+
+.ingredient-row.is-missing {
+  border-color: rgba(198, 95, 85, 0.34);
+  background: rgba(198, 95, 85, 0.11);
+  cursor: pointer;
+}
+
+.ingredient-row.is-missing:hover,
+.ingredient-row.is-missing:focus-visible {
+  border-color: var(--danger);
+}
+
+.ingredient-row.is-matched {
+  border-color: rgba(127, 147, 84, 0.34);
+}
+
+.ingredient-status {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ingredient-status.missing {
+  color: var(--danger);
+}
+
+.ingredient-status.matched {
+  color: var(--accent-dark);
+}
+
+.modal-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: end center;
+  padding: 18px;
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.34);
+}
+
+.modal-card {
+  position: relative;
+  z-index: 1;
+  width: min(520px, 100%);
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  padding: 20px;
+  background: var(--panel);
+  box-shadow: 0 20px 42px rgba(54, 64, 32, 0.24);
+}
+
+.lead.compact {
+  margin: 0;
+}
+
+.match-list {
+  display: grid;
+  gap: 8px;
+}
+
+.match-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px;
+  color: var(--text);
+  background: var(--input);
+  cursor: pointer;
+  text-align: left;
+}
+
+.match-option:hover,
+.match-option:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.match-option span {
+  display: grid;
+  gap: 3px;
+}
+
+.match-option small {
+  color: var(--muted);
+}
+
+.match-option ion-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--accent-dark);
+}
+
 .recipe-detail-hero {
   display: grid;
   grid-template-columns: minmax(280px, 42%) minmax(0, 1fr);
@@ -464,6 +857,10 @@ button:hover {
   align-self: center;
 }
 
+.save-button {
+  margin-top: 18px;
+}
+
 .recipe-detail-grid {
   display: grid;
   grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
@@ -482,12 +879,107 @@ button:hover {
   line-height: 1.55;
 }
 
+.list-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.3fr) 120px 120px 150px 130px auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.list-form label {
+  margin-top: 0;
+}
+
+.item-table {
+  display: grid;
+  gap: 10px;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--input);
+}
+
+.item-row.is-checked {
+  opacity: 0.68;
+}
+
+.item-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.item-main input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+}
+
+.item-main div {
+  display: grid;
+  gap: 4px;
+}
+
+.item-main strong {
+  overflow-wrap: anywhere;
+}
+
+.item-main span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.item-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.qty-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: var(--panel-alt);
+  color: var(--text);
+  font-size: 13px;
+}
+
 .status-line {
   min-height: 20px;
   margin: 18px 0 0;
 }
 
 @media (max-width: 840px) {
+  body:has(.app-rail:not([hidden])) .page-shell {
+    padding-left: 0;
+    padding-bottom: 104px;
+  }
+
+  .app-rail {
+    top: auto;
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+    grid-template-columns: repeat(4, 1fr);
+    width: auto;
+    border-radius: 999px;
+    transform: none;
+  }
+
+  .app-rail a {
+    min-height: 56px;
+  }
+
   .two,
   .four,
   .row,
@@ -497,18 +989,32 @@ button:hover {
   .recipe-detail-grid,
   .recipe-grid,
   .recipe-grid.compact,
+  .list-form,
   .stats-grid,
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
 
   .site-header,
-  .page-header {
+  .page-header,
+  .section-title,
+  .toolbar-actions {
     align-items: flex-start;
     flex-direction: column;
   }
 
+  .profile-menu {
+    left: 0;
+    right: auto;
+  }
+
   .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .item-row,
+  .item-actions {
     align-items: stretch;
     flex-direction: column;
   }

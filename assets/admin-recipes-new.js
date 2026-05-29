@@ -1,10 +1,10 @@
 import { hasSupabaseConfig, supabase } from './supabase-client.js';
+import { setupUserMenu } from './user-menu.js';
 
 const form = document.querySelector('#recipe-form');
 const ingredientsList = document.querySelector('#ingredients-list');
 const stepsList = document.querySelector('#steps-list');
 const statusMessage = document.querySelector('#status-message');
-const logoutButton = document.querySelector('#logout-button');
 
 function normalizeIngredientName(value) {
   return value
@@ -174,6 +174,7 @@ async function handleSubmit(event) {
     cook_time_minutes: nullableInteger(data.get('cook_time_minutes')),
     difficulty: nullableText(data.get('difficulty')),
     is_published: data.get('is_published') === 'on',
+    created_by_user_id: sessionData.session.user.id,
   };
 
   statusMessage.textContent = 'Ukladam...';
@@ -224,18 +225,15 @@ async function requireSession() {
 
   if (!data.session) {
     window.location.href = '/login';
+    return;
   }
-}
 
-async function handleLogout() {
-  await supabase.auth.signOut();
-  window.location.href = '/login';
+  await setupUserMenu();
 }
 
 document.querySelector('#add-ingredient').addEventListener('click', () => addIngredientRow());
 document.querySelector('#add-step').addEventListener('click', () => addStepRow());
 form.addEventListener('submit', handleSubmit);
-logoutButton.addEventListener('click', handleLogout);
 
 addIngredientRow();
 addStepRow();

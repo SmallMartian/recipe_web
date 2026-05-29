@@ -13,8 +13,14 @@
           <p class="eyebrow">Admin</p>
           <h1>Novy recept</h1>
         </div>
-        <button type="button" id="logout-button">Odhlasit sa</button>
+        <div class="profile-menu-wrap" data-user-menu hidden></div>
       </header>
+      <nav class="app-rail" data-app-nav>
+        <a href="/" data-nav="dashboard" aria-label="Dashboard"><span><ion-icon name="home-outline"></ion-icon></span><strong>Domov</strong></a>
+        <a href="/inventory/" data-nav="inventory" aria-label="Inventar"><span><ion-icon name="leaf-outline"></ion-icon></span><strong>Inventar</strong></a>
+        <a href="/shopping/" data-nav="shopping" aria-label="Nakup"><span><ion-icon name="basket-outline"></ion-icon></span><strong>Nakup</strong></a>
+        <a href="/recipes/" data-nav="recipes" class="is-active" aria-label="Recepty"><span><ion-icon name="restaurant-outline"></ion-icon></span><strong>Recepty</strong></a>
+      </nav>
 
       <form id="recipe-form" class="form-stack">
         <section class="panel">
@@ -88,6 +94,7 @@
       </form>
     </main>
 
+    <script type="module" src="https://unpkg.com/ionicons@7.4.0/dist/ionicons/ionicons.esm.js"></script>
     <script src="/assets/env.js"></script>
     <script type="module" src="/assets/admin-recipes-new.js"></script>
   </body>
