@@ -108,6 +108,12 @@ function renderEmpty(target, message) {
   target.innerHTML = `<p class="empty-state">${message}</p>`;
 }
 
+function isPremiumRecord(row) {
+  if (!row?.is_premium) return false;
+  if (!row.premium_until) return true;
+  return new Date(row.premium_until).getTime() > Date.now();
+}
+
 async function loadPublishedRecipes() {
   const { data, error } = await supabase
     .from('recipes')
@@ -204,12 +210,13 @@ function bindIngredientSearch(recipes) {
 }
 
 async function loadUserHomeData(session) {
-  const [{ data: profile }, { data: households, error: householdError }, recipes] = await Promise.all([
-    supabase.from('profiles').select('display_name,handle,email,avatar_url').eq('id', session.user.id).maybeSingle(),
-    supabase.from('households').select('id,name,created_at').order('created_at', { ascending: true }),
+  const [{ data: profile, error: profileError }, { data: households, error: householdError }, recipes] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
+    supabase.from('households').select('*').order('created_at', { ascending: true }),
     loadPublishedRecipes(),
   ]);
 
+  if (profileError) console.warn('Profile load failed', profileError);
   if (householdError) throw householdError;
 
   return {
@@ -376,13 +383,13 @@ async function renderDashboard(session) {
   const storedActiveId = localStorage.getItem(ACTIVE_HOUSEHOLD_KEY);
   const activeHousehold = households.find((household) => household.id === storedActiveId) || households[0];
   householdSelect.value = activeHousehold.id;
-  document.querySelector('#dashboard-subtitle').textContent = `Prehlad pre domacnost ${activeHousehold.name}.`;
+  document.querySelector('#dashboard-subtitle').textContent = `Prehlad pre domacnost ${activeHousehold.name}. Domacnost: ${isPremiumRecord(activeHousehold) ? 'Premium' : 'Free'}.`;
 
   householdSelect.addEventListener('change', async () => {
     const nextId = householdSelect.value;
     const nextHousehold = households.find((household) => household.id === nextId);
     localStorage.setItem(ACTIVE_HOUSEHOLD_KEY, nextId);
-    document.querySelector('#dashboard-subtitle').textContent = `Prehlad pre domacnost ${nextHousehold?.name || 'domacnost'}.`;
+    document.querySelector('#dashboard-subtitle').textContent = `Prehlad pre domacnost ${nextHousehold?.name || 'domacnost'}. Domacnost: ${isPremiumRecord(nextHousehold) ? 'Premium' : 'Free'}.`;
     await renderDashboardForHousehold(nextId, recipes);
   });
 

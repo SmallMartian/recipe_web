@@ -5,6 +5,13 @@ const form = document.querySelector('#recipe-form');
 const ingredientsList = document.querySelector('#ingredients-list');
 const stepsList = document.querySelector('#steps-list');
 const statusMessage = document.querySelector('#status-message');
+let currentProfile = null;
+
+function isPremiumProfile(profile) {
+  if (!profile?.is_premium) return false;
+  if (!profile.premium_until) return true;
+  return new Date(profile.premium_until).getTime() > Date.now();
+}
 
 function normalizeIngredientName(value) {
   return value
@@ -165,6 +172,11 @@ async function handleSubmit(event) {
   }
 
   const data = new FormData(form);
+  if (data.get('is_published') === 'on' && !isPremiumProfile(currentProfile)) {
+    statusMessage.textContent = 'Publikovanie receptov vyzaduje Premium ucet.';
+    return;
+  }
+
   const recipe = {
     title: data.get('title').trim(),
     description: nullableText(data.get('description')),
@@ -226,6 +238,20 @@ async function requireSession() {
   if (!data.session) {
     window.location.href = '/login';
     return;
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', data.session.user.id)
+    .maybeSingle();
+  currentProfile = profile || null;
+
+  const publishInput = form.elements.is_published;
+  if (publishInput && !isPremiumProfile(currentProfile)) {
+    publishInput.checked = false;
+    publishInput.disabled = true;
+    publishInput.closest('label')?.insertAdjacentHTML('beforeend', '<small>Publikovanie vyzaduje Premium ucet.</small>');
   }
 
   await setupUserMenu();

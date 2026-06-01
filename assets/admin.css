@@ -454,6 +454,24 @@ button:hover {
   font-size: 12px;
 }
 
+.premium-chip {
+  width: fit-content;
+  margin-top: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: var(--panel-alt);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.premium-chip.is-premium {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.14);
+  color: #15803d;
+}
+
 .profile-chevron {
   color: var(--muted);
   font-size: 16px;
@@ -755,6 +773,10 @@ button:hover {
 
 .ingredient-status.matched {
   color: var(--accent-dark);
+}
+
+.recipe-shopping-button {
+  margin-top: 10px;
 }
 
 .modal-backdrop {

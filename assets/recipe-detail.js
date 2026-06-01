@@ -1,5 +1,13 @@
 import { hasSupabaseConfig, supabase } from './supabase-client.js';
 import { getCurrentProfile, renderUserMenu } from './user-menu.js';
+import {
+  buildShoppingRow,
+  computeExpiryForName,
+  loadItemPreferences,
+  normalizeItemUnit,
+  pickCanonicalDisplayName,
+  upsertListItemWithMerge,
+} from './basil-item-logic.js';
 
 const params = new URLSearchParams(window.location.search);
 const recipeId = params.get('id');
@@ -19,9 +27,17 @@ let currentRecipe = null;
 let currentSave = null;
 let currentIngredients = [];
 let currentInventoryItems = [];
+let currentKnownItems = [];
 let currentIngredientAliases = {};
 let currentUserIngredientAliases = {};
+let currentRecipeHousehold = null;
 let selectedIngredient = null;
+
+function isPremiumRecord(row) {
+  if (!row?.is_premium) return false;
+  if (!row.premium_until) return true;
+  return new Date(row.premium_until).getTime() > Date.now();
+}
 
 function setMessage(value) {
   message.textContent = value || '';
@@ -168,11 +184,25 @@ function formatQuantity(ingredient) {
 }
 
 function findInventoryMatches(ingredientName) {
-  return currentInventoryItems
+  const byName = new Map();
+
+  for (const item of currentInventoryItems) {
+    const key = normalizeIngredientName(item?.name);
+    if (key) byName.set(key, { ...item, source: 'inventory' });
+  }
+
+  for (const name of currentKnownItems) {
+    const key = normalizeIngredientName(name);
+    if (key && !byName.has(key)) {
+      byName.set(key, { id: `known_${key}`, name, source: 'known' });
+    }
+  }
+
+  return [...byName.values()]
     .map((item) => ({ item, score: similarityScore(ingredientName, item.name) }))
     .filter((match) => match.item?.name && match.score >= 25)
     .sort((a, b) => b.score - a.score || String(a.item.name).localeCompare(String(b.item.name)))
-    .slice(0, 6);
+    .slice(0, 8);
 }
 
 function getIngredientState(ingredient) {
@@ -189,6 +219,19 @@ function getIngredientState(ingredient) {
     missing: !ingredient.optional && !directMatched && !aliasMatched,
     aliasName: aliasMatched ? aliasName : '',
   };
+}
+
+function getMissingIngredients() {
+  if (!currentSession) return [];
+  return currentIngredients.filter((ingredient) => getIngredientState(ingredient).missing);
+}
+
+function getClientItemId() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+
+  return `recipe_web_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
 function recipeUrl(id) {
@@ -361,7 +404,7 @@ function renderIngredients(ingredients) {
     return;
   }
 
-  target.innerHTML = ingredients
+  const rows = ingredients
     .map(
       (ingredient) => {
         const state = getIngredientState(ingredient);
@@ -383,6 +426,17 @@ function renderIngredients(ingredients) {
       },
     )
     .join('');
+
+  const missingCount = getMissingIngredients().length;
+  const addButton = missingCount > 0 && currentRecipeHousehold?.id
+    ? `
+      <button type="button" class="primary recipe-shopping-button" data-add-missing-shopping>
+        Pridat chybajuce do nakupu (${missingCount})
+      </button>
+    `
+    : '';
+
+  target.innerHTML = `${rows}${addButton}`;
 }
 
 function renderIngredientMatcher() {
@@ -415,7 +469,7 @@ function renderIngredientMatcher() {
               <button type="button" class="match-option" data-match-name="${escapeHtml(match.item.name)}">
                 <span>
                   <strong>${escapeHtml(match.item.name)}</strong>
-                  <small>Podobnost ${match.score}%</small>
+                  <small>${match.item.source === 'known' ? 'Pouzite v minulosti' : `Podobnost ${match.score}%`}</small>
                 </span>
                 <ion-icon name="checkmark-circle-outline"></ion-icon>
               </button>
@@ -433,13 +487,28 @@ async function loadInventoryItemsForMatching() {
 
   const { data: households, error: householdsError } = await supabase
     .from('households')
-    .select('id,name,created_at')
+    .select('*')
     .order('created_at', { ascending: true });
   if (householdsError) throw householdsError;
 
   const activeHouseholdId = localStorage.getItem(ACTIVE_HOUSEHOLD_KEY);
   const household = (households || []).find((item) => item.id === activeHouseholdId) || households?.[0];
+  currentRecipeHousehold = household || null;
+  currentKnownItems = [];
   if (!household?.id) return [];
+
+  try {
+    const preferences = await loadItemPreferences({
+      supabase,
+      householdId: household.id,
+      userId: currentSession?.user?.id,
+    });
+    currentKnownItems = [...preferences.itemPreferences.values()]
+      .map((row) => String(row.display_name || row.normalized_name || '').trim())
+      .filter(Boolean);
+  } catch (error) {
+    console.error('Recipe known item preferences load failed:', error);
+  }
 
   const { data: list, error: listError } = await supabase
     .from('lists')
@@ -459,6 +528,104 @@ async function loadInventoryItemsForMatching() {
     .eq('status', 'active');
   if (error) throw error;
   return Array.isArray(data) ? data : [];
+}
+
+async function getDefaultShoppingList(householdId) {
+  const { data: existing, error: existingError } = await supabase
+    .from('lists')
+    .select('id,type,name,is_default')
+    .eq('household_id', householdId)
+    .eq('type', 'shopping')
+    .order('is_default', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (existing) return existing;
+
+  const { data: createdId, error: rpcError } = await supabase.rpc('get_or_create_default_list', {
+    target_household_id: householdId,
+    target_type: 'shopping',
+  });
+
+  if (rpcError) throw rpcError;
+
+  return {
+    id: createdId,
+    type: 'shopping',
+    name: 'Shopping',
+    is_default: true,
+  };
+}
+
+async function loadAllListItemsForHousehold(householdId) {
+  const { data: lists, error: listsError } = await supabase
+    .from('lists')
+    .select('id')
+    .eq('household_id', householdId);
+
+  if (listsError) throw listsError;
+
+  const listIds = (lists || []).map((list) => list.id);
+  if (listIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('list_items')
+    .select('name,list_id,status')
+    .in('list_id', listIds)
+    .neq('status', 'archived');
+
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+async function addMissingIngredientsToShopping() {
+  if (!currentSession?.user?.id || !currentRecipeHousehold?.id) {
+    setMessage('Najprv sa prihlas a vyber aktivnu domacnost.');
+    return;
+  }
+
+  const missingIngredients = getMissingIngredients();
+  if (missingIngredients.length === 0) return;
+
+  const button = document.querySelector('[data-add-missing-shopping]');
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Pridavam...';
+  }
+
+  try {
+    const shoppingList = await getDefaultShoppingList(currentRecipeHousehold.id);
+    const allHouseholdItems = await loadAllListItemsForHousehold(currentRecipeHousehold.id);
+
+    for (const ingredient of missingIngredients) {
+      const canonicalName = pickCanonicalDisplayName(ingredient.name, [allHouseholdItems]);
+      const row = buildShoppingRow({
+        listId: shoppingList.id,
+        userId: currentSession.user.id,
+        input: {
+          clientItemId: getClientItemId(),
+          quantity: ingredient.quantity ?? 1,
+          unit: normalizeItemUnit(ingredient.unit || 'pcs'),
+        },
+        canonicalName,
+        expiryDate: computeExpiryForName(canonicalName, { itemPreferences: new Map(), quickPreferences: new Map() }),
+      });
+
+      await upsertListItemWithMerge({
+        supabase,
+        listType: 'shopping',
+        row,
+        userId: currentSession.user.id,
+      });
+    }
+
+    setMessage(`Chybajuce suroviny boli pridane do nakupneho zoznamu (${missingIngredients.length}).`);
+  } catch (error) {
+    setMessage(error.message || 'Nepodarilo sa pridat suroviny do nakupu.');
+  } finally {
+    renderIngredients(currentIngredients);
+  }
 }
 
 function renderSteps(steps) {
@@ -507,6 +674,7 @@ function renderRecipe(recipe, ingredients, steps) {
     recipe.cook_time_minutes ? `Varenie ${recipe.cook_time_minutes} min` : null,
     totalTime ? `Spolu ${totalTime} min` : null,
     recipe.difficulty ? `Narocnost ${recipe.difficulty}` : null,
+    currentRecipeHousehold ? `Domacnost: ${isPremiumRecord(currentRecipeHousehold) ? 'Premium' : 'Free'}` : null,
   ].filter(Boolean);
 
   document.querySelector('#recipe-image').src = image;
@@ -625,6 +793,11 @@ async function init() {
 saveButton.addEventListener('click', toggleSave);
 
 document.addEventListener('click', (event) => {
+  if (event.target.closest('[data-add-missing-shopping]')) {
+    addMissingIngredientsToShopping();
+    return;
+  }
+
   const row = event.target.closest('.ingredient-row.is-missing');
   if (row && currentSession) {
     const ingredient = currentIngredients.find((item) => String(item.id) === String(row.dataset.ingredientId));

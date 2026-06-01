@@ -13,6 +13,12 @@ function getSecondary(profile, fallbackEmail) {
   return profile?.handle ? `@${profile.handle}` : profile?.email || fallbackEmail || '';
 }
 
+function isPremiumProfile(profile) {
+  if (!profile?.is_premium) return false;
+  if (!profile.premium_until) return true;
+  return new Date(profile.premium_until).getTime() > Date.now();
+}
+
 function avatarHtml(profile, fallbackEmail) {
   if (profile?.avatar_url) {
     return `<img src="${profile.avatar_url}" alt="" />`;
@@ -51,12 +57,16 @@ function bindGlobalClose() {
 export async function getCurrentProfile(session) {
   if (!session) return null;
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
-    .select('display_name,handle,email,avatar_url')
+    .select('*')
     .eq('id', session.user.id)
     .maybeSingle();
 
+  if (error) {
+    console.warn('Profile load failed', error);
+    return { email: session.user.email };
+  }
   return data || { email: session.user.email };
 }
 
@@ -65,6 +75,7 @@ export function renderUserMenu({ profile, user, redirectAfterLogout = '/' }) {
   const fallbackEmail = user?.email || profile?.email || '';
   const displayName = getDisplayName(profile, fallbackEmail);
   const secondary = getSecondary(profile, fallbackEmail);
+  const premiumLabel = isPremiumProfile(profile) ? 'Premium' : 'Free';
 
   bindGlobalClose();
 
@@ -75,6 +86,7 @@ export function renderUserMenu({ profile, user, redirectAfterLogout = '/' }) {
         <span class="profile-copy">
           <strong>${displayName}</strong>
           ${secondary ? `<small>${secondary}</small>` : ''}
+          <small class="premium-chip ${isPremiumProfile(profile) ? 'is-premium' : ''}">${premiumLabel}</small>
         </span>
         <span class="profile-chevron" aria-hidden="true">v</span>
       </button>
