@@ -15,8 +15,11 @@ const dashboardInventoryStat = document.querySelector('#dashboard-inventory-stat
 const dashboardExpiringStat = document.querySelector('#dashboard-expiring-stat');
 const dashboardShoppingStat = document.querySelector('#dashboard-shopping-stat');
 
+let currentSession = null;
+
 const ACTIVE_HOUSEHOLD_KEY = 'recipe_web_active_household_id';
 const INGREDIENT_ALIASES_KEY = 'recipe_web_recipe_ingredient_aliases_v1';
+const INGREDIENT_USER_ALIASES_KEY = 'recipe_web_recipe_ingredient_user_aliases_v1';
 
 function setStatus(message) {
   statusLine.textContent = message || '';
@@ -53,6 +56,30 @@ function loadAllIngredientAliases() {
   } catch {
     return {};
   }
+}
+
+function loadUserIngredientAliases(session) {
+  const userKey = session?.user?.id || 'local';
+  try {
+    const map = JSON.parse(localStorage.getItem(INGREDIENT_USER_ALIASES_KEY) || '{}');
+    return map[userKey] && typeof map[userKey] === 'object' ? map[userKey] : { ingredients: {}, inventoryItems: {} };
+  } catch {
+    return { ingredients: {}, inventoryItems: {} };
+  }
+}
+
+function getIngredientAlias(ingredient, recipeAliases = {}, userAliases = {}) {
+  const recipeAlias = recipeAliases?.[ingredient.id];
+  if (recipeAlias) return recipeAlias;
+
+  const normalized = ingredient.normalized_name || normalizeIngredientName(ingredient.name);
+  const legacyAlias = userAliases?.[normalized];
+  if (legacyAlias) return legacyAlias;
+
+  const inventoryKey = userAliases?.ingredients?.[normalized];
+  if (!inventoryKey) return '';
+
+  return userAliases?.inventoryItems?.[inventoryKey]?.name || inventoryKey;
 }
 
 function renderRecipeCard(recipe) {
@@ -248,6 +275,7 @@ function renderMatchedRecipes(recipes, inventoryItems) {
   const target = document.querySelector('#matched-recipes');
   const inventoryNames = new Set(inventoryItems.map((item) => normalizeIngredientName(item.name)));
   const aliasesByRecipe = loadAllIngredientAliases();
+  const userAliases = loadUserIngredientAliases(currentSession);
 
   if (recipes.length === 0) {
     renderEmpty(target, 'Publikovane recepty sa zobrazia tu.');
@@ -263,7 +291,7 @@ function renderMatchedRecipes(recipes, inventoryItems) {
       const aliases = aliasesByRecipe?.[recipe.id] || {};
       const matchedCount = relevant.filter((ingredient) => {
         const directName = ingredient.normalized_name || normalizeIngredientName(ingredient.name);
-        const aliasName = aliases[ingredient.id];
+        const aliasName = getIngredientAlias(ingredient, aliases, userAliases);
         return inventoryNames.has(directName) ||
           (aliasName && inventoryNames.has(normalizeIngredientName(aliasName)));
       }).length;
@@ -370,6 +398,7 @@ async function init() {
 
   const { data } = await supabase.auth.getSession();
   const session = data.session;
+  currentSession = session;
 
   authLinks.forEach((link) => {
     link.hidden = !session;

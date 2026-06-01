@@ -12,6 +12,7 @@ const appNav = document.querySelector('[data-app-nav]');
 const saveButton = document.querySelector('#save-recipe-button');
 const ACTIVE_HOUSEHOLD_KEY = 'recipe_web_active_household_id';
 const INGREDIENT_ALIASES_KEY = 'recipe_web_recipe_ingredient_aliases_v1';
+const INGREDIENT_USER_ALIASES_KEY = 'recipe_web_recipe_ingredient_user_aliases_v1';
 
 let currentSession = null;
 let currentRecipe = null;
@@ -19,6 +20,7 @@ let currentSave = null;
 let currentIngredients = [];
 let currentInventoryItems = [];
 let currentIngredientAliases = {};
+let currentUserIngredientAliases = {};
 let selectedIngredient = null;
 
 function setMessage(value) {
@@ -86,8 +88,32 @@ function loadIngredientAliases(recipeIdValue) {
   }
 }
 
+function loadUserIngredientAliases() {
+  const userKey = currentSession?.user?.id || 'local';
+  try {
+    const map = JSON.parse(localStorage.getItem(INGREDIENT_USER_ALIASES_KEY) || '{}');
+    return map[userKey] && typeof map[userKey] === 'object' ? map[userKey] : { ingredients: {}, inventoryItems: {} };
+  } catch {
+    return { ingredients: {}, inventoryItems: {} };
+  }
+}
+
+function getIngredientAlias(ingredient) {
+  const recipeAlias = currentIngredientAliases[ingredient.id];
+  if (recipeAlias) return recipeAlias;
+
+  const normalized = ingredient.normalized_name || normalizeIngredientName(ingredient.name);
+  const legacyAlias = currentUserIngredientAliases[normalized];
+  if (legacyAlias) return legacyAlias;
+
+  const inventoryKey = currentUserIngredientAliases.ingredients?.[normalized];
+  if (!inventoryKey) return '';
+
+  return currentUserIngredientAliases.inventoryItems?.[inventoryKey]?.name || inventoryKey;
+}
+
 function saveIngredientAlias(ingredientId, inventoryName) {
-  if (!recipeId || !ingredientId || !inventoryName) return;
+  if (!recipeId || !ingredientId || !inventoryName || !selectedIngredient) return;
   const map = JSON.parse(localStorage.getItem(INGREDIENT_ALIASES_KEY) || '{}');
   const recipeAliases = map[recipeId] && typeof map[recipeId] === 'object' ? map[recipeId] : {};
   currentIngredientAliases = {
@@ -97,6 +123,36 @@ function saveIngredientAlias(ingredientId, inventoryName) {
   localStorage.setItem(INGREDIENT_ALIASES_KEY, JSON.stringify({
     ...map,
     [recipeId]: currentIngredientAliases,
+  }));
+
+  const normalizedIngredient = normalizeIngredientName(selectedIngredient.name);
+  const normalizedInventory = normalizeIngredientName(inventoryName);
+  if (!normalizedIngredient || !normalizedInventory) return;
+
+  const userKey = currentSession?.user?.id || 'local';
+  const userMap = JSON.parse(localStorage.getItem(INGREDIENT_USER_ALIASES_KEY) || '{}');
+  const userAliases = userMap[userKey] && typeof userMap[userKey] === 'object' ? userMap[userKey] : {};
+  const inventoryItems = userAliases.inventoryItems && typeof userAliases.inventoryItems === 'object' ? userAliases.inventoryItems : {};
+  const currentItem = inventoryItems[normalizedInventory] && typeof inventoryItems[normalizedInventory] === 'object' ? inventoryItems[normalizedInventory] : {};
+  const aliasSet = new Set([...(Array.isArray(currentItem.aliases) ? currentItem.aliases : []), normalizedIngredient]);
+
+  currentUserIngredientAliases = {
+    ingredients: {
+      ...(userAliases.ingredients || {}),
+      [normalizedIngredient]: normalizedInventory,
+    },
+    inventoryItems: {
+      ...inventoryItems,
+      [normalizedInventory]: {
+        name: String(inventoryName),
+        aliases: [...aliasSet],
+      },
+    },
+  };
+
+  localStorage.setItem(INGREDIENT_USER_ALIASES_KEY, JSON.stringify({
+    ...userMap,
+    [userKey]: currentUserIngredientAliases,
   }));
 }
 
@@ -124,7 +180,7 @@ function getIngredientState(ingredient) {
 
   const inventoryNames = new Set(currentInventoryItems.map((item) => normalizeIngredientName(item.name)).filter(Boolean));
   const normalized = ingredient.normalized_name || normalizeIngredientName(ingredient.name);
-  const aliasName = currentIngredientAliases[ingredient.id];
+  const aliasName = getIngredientAlias(ingredient);
   const directMatched = inventoryNames.has(normalized);
   const aliasMatched = aliasName && inventoryNames.has(normalizeIngredientName(aliasName));
 
@@ -505,6 +561,7 @@ async function loadRecipe() {
   }
 
   currentIngredientAliases = loadIngredientAliases(recipeId);
+  currentUserIngredientAliases = loadUserIngredientAliases();
   currentInventoryItems = await loadInventoryItemsForMatching();
   currentSave = await loadCurrentSave();
   renderRecipe(recipe, ingredients || [], steps || []);
