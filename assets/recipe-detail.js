@@ -536,8 +536,7 @@ async function getDefaultShoppingList(householdId) {
     .select('id,type,name,is_default')
     .eq('household_id', householdId)
     .eq('type', 'shopping')
-    .order('is_default', { ascending: false })
-    .limit(1)
+    .eq('is_default', true)
     .maybeSingle();
 
   if (existingError) throw existingError;

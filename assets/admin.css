@@ -796,7 +796,11 @@ button:hover {
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgba(0, 0, 0, 0.34);
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: default;
 }
 
 .modal-card {

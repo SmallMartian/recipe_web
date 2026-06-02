@@ -234,8 +234,8 @@ async function loadHouseholdLists(householdId) {
 
   if (listsError) throw listsError;
 
-  const inventoryList = (lists || []).find((list) => list.type === 'inventory' && list.is_default) || (lists || []).find((list) => list.type === 'inventory');
-  const shoppingList = (lists || []).find((list) => list.type === 'shopping' && list.is_default) || (lists || []).find((list) => list.type === 'shopping');
+  const inventoryList = (lists || []).find((list) => list.type === 'inventory' && list.is_default);
+  const shoppingList = (lists || []).find((list) => list.type === 'shopping' && list.is_default);
   const listIds = [inventoryList?.id, shoppingList?.id].filter(Boolean);
 
   if (listIds.length === 0) {

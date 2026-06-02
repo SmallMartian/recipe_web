@@ -29,6 +29,7 @@ let currentList = null;
 let currentSort = listType === 'inventory' && params.get('sort') === 'expiry' ? 'expiry' : 'updated';
 let currentHouseholdId = null;
 let currentPreferences = { itemPreferences: new Map(), quickPreferences: new Map() };
+let listRealtimeChannel = null;
 
 function setStatus(value) {
   statusLine.textContent = value || '';
@@ -199,8 +200,7 @@ async function getDefaultList(householdId) {
     .select('id,type,name,is_default')
     .eq('household_id', householdId)
     .eq('type', listType)
-    .order('is_default', { ascending: false })
-    .limit(1)
+    .eq('is_default', true)
     .maybeSingle();
 
   if (existingError) throw existingError;
@@ -315,6 +315,32 @@ async function refreshItems() {
   setStatus(listType === 'inventory' && currentSort === 'expiry' ? 'Zoradene podla najblizsej expiracie.' : '');
 }
 
+function subscribeToCurrentList() {
+  if (listRealtimeChannel) {
+    supabase.removeChannel(listRealtimeChannel);
+    listRealtimeChannel = null;
+  }
+
+  if (!currentList?.id) return;
+
+  // Web ma reagovat aj na zmeny z mobilu, nielen na vlastny submit/refresh.
+  listRealtimeChannel = supabase
+    .channel(`recipe-web-${listType}-${currentList.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'list_items',
+        filter: `list_id=eq.${currentList.id}`,
+      },
+      () => {
+        refreshItems().catch((error) => setStatus(error.message));
+      },
+    )
+    .subscribe();
+}
+
 async function setHousehold(householdId) {
   if (!householdId) return;
   localStorage.setItem(ACTIVE_HOUSEHOLD_KEY, householdId);
@@ -326,6 +352,7 @@ async function setHousehold(householdId) {
     userId: currentSession?.user?.id,
   });
   applySuggestedDefaults({ force: true });
+  subscribeToCurrentList();
   await refreshItems();
 }
 
@@ -503,6 +530,14 @@ form.addEventListener('submit', addItem);
 itemsTarget.addEventListener('click', handleItemAction);
 itemsTarget.addEventListener('change', handleItemAction);
 refreshButton.addEventListener('click', refreshItems);
+window.addEventListener('focus', () => {
+  if (currentList?.id) refreshItems().catch((error) => setStatus(error.message));
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && currentList?.id) {
+    refreshItems().catch((error) => setStatus(error.message));
+  }
+});
 sortSelect?.addEventListener('change', () => {
   currentSort = sortSelect.value;
   const url = new URL(window.location.href);
