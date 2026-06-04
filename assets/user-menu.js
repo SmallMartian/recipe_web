@@ -10,7 +10,14 @@ function getDisplayName(profile, fallbackEmail) {
 }
 
 function getSecondary(profile, fallbackEmail) {
-  return profile?.handle ? `@${profile.handle}` : profile?.email || fallbackEmail || '';
+  return profile?.handle || profile?.email || fallbackEmail || '';
+}
+
+function splitHandleSuffix(value) {
+  const raw = String(value || '').trim();
+  const match = raw.match(/^(.*?)(#\d{4})$/);
+  if (!match) return { main: raw, suffix: '' };
+  return { main: match[1], suffix: match[2] };
 }
 
 function isPremiumProfile(profile) {
@@ -19,12 +26,29 @@ function isPremiumProfile(profile) {
   return new Date(profile.premium_until).getTime() > Date.now();
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function initialHtml(value) {
+  return `
+    <svg class="profile-initial" viewBox="0 0 56 56" aria-hidden="true" focusable="false">
+      <text x="26" y="25" text-anchor="middle" dominant-baseline="central">${escapeHtml(value)}</text>
+    </svg>
+  `;
+}
+
 function avatarHtml(profile, fallbackEmail) {
   if (profile?.avatar_url) {
-    return `<img src="${profile.avatar_url}" alt="" />`;
+    return `<img src="${escapeHtml(profile.avatar_url)}" alt="" />`;
   }
 
-  return `<span class="profile-initial">${getInitial(profile, fallbackEmail)}</span>`;
+  return initialHtml(getInitial(profile, fallbackEmail));
 }
 
 function closeAllMenus() {
@@ -73,7 +97,8 @@ export async function getCurrentProfile(session) {
 export function renderUserMenu({ profile, user, redirectAfterLogout = '/' }) {
   const menus = [...document.querySelectorAll('[data-user-menu]')];
   const fallbackEmail = user?.email || profile?.email || '';
-  const displayName = getDisplayName(profile, fallbackEmail);
+  const handleParts = splitHandleSuffix(profile?.handle);
+  const displayName = profile?.display_name || handleParts.main || getDisplayName(profile, fallbackEmail);
   const secondary = getSecondary(profile, fallbackEmail);
   const premiumLabel = isPremiumProfile(profile) ? 'Premium' : 'Free';
 
@@ -84,13 +109,14 @@ export function renderUserMenu({ profile, user, redirectAfterLogout = '/' }) {
       <button type="button" class="profile-badge" data-user-menu-button aria-expanded="false">
         <span class="profile-avatar">${avatarHtml(profile, fallbackEmail)}</span>
         <span class="profile-copy">
-          <strong>${displayName}</strong>
-          ${secondary ? `<small>${secondary}</small>` : ''}
-          <small class="premium-chip ${isPremiumProfile(profile) ? 'is-premium' : ''}">${premiumLabel}</small>
+          <strong>${displayName}${handleParts.suffix ? `<small>${handleParts.suffix}</small>` : ''}</strong>
+          ${!handleParts.suffix && secondary ? `<small class="profile-secondary">${secondary}</small>` : ''}
         </span>
-        <span class="profile-chevron" aria-hidden="true">v</span>
+        <small class="premium-chip ${isPremiumProfile(profile) ? 'is-premium' : ''}">${premiumLabel}</small>
+        <ion-icon class="profile-chevron" name="chevron-down-outline" aria-hidden="true"></ion-icon>
       </button>
       <div class="profile-menu" data-user-menu-dropdown hidden>
+        <a href="/settings/">Nastavenia</a>
         <a href="/inventory/">Inventar</a>
         <a href="/shopping/">Nakupny zoznam</a>
         <a href="/recipes/">Moje recepty</a>

@@ -2,15 +2,51 @@ import { hasSupabaseConfig, supabase } from './supabase-client.js';
 import { setupUserMenu } from './user-menu.js';
 
 const form = document.querySelector('#recipe-form');
+const categoryList = document.querySelector('#category-list');
 const ingredientsList = document.querySelector('#ingredients-list');
 const stepsList = document.querySelector('#steps-list');
 const statusMessage = document.querySelector('#status-message');
+const publishButton = document.querySelector('[data-publish-button]');
+const publishPremiumNote = document.querySelector('[data-premium-publish-note]');
 let currentProfile = null;
+
+const RECIPE_CATEGORIES = [
+  { slug: 'breakfast', name: 'Ranajky' },
+  { slug: 'soup', name: 'Polievky' },
+  { slug: 'main', name: 'Hlavne jedla' },
+  { slug: 'side', name: 'Prilohy' },
+  { slug: 'salad', name: 'Salaty' },
+  { slug: 'pasta', name: 'Cestoviny' },
+  { slug: 'rice', name: 'Ryza' },
+  { slug: 'meat', name: 'Maso' },
+  { slug: 'fish', name: 'Ryby' },
+  { slug: 'vegetarian', name: 'Bezmasite' },
+  { slug: 'vegan', name: 'Veganske' },
+  { slug: 'sweet', name: 'Sladke' },
+  { slug: 'dessert', name: 'Dezerty' },
+  { slug: 'baking', name: 'Pecenie' },
+  { slug: 'quick', name: 'Rychle' },
+  { slug: 'healthy', name: 'Zdrave' },
+  { slug: 'kids', name: 'Pre deti' },
+  { slug: 'drink', name: 'Napoje' },
+];
 
 function isPremiumProfile(profile) {
   if (!profile?.is_premium) return false;
   if (!profile.premium_until) return true;
   return new Date(profile.premium_until).getTime() > Date.now();
+}
+
+function renderCategoryOptions() {
+  if (!categoryList) return;
+  categoryList.innerHTML = RECIPE_CATEGORIES
+    .map((category) => `
+      <label class="chip-check">
+        <input type="checkbox" name="category_slugs" value="${category.slug}" />
+        <span>${category.name}</span>
+      </label>
+    `)
+    .join('');
 }
 
 function normalizeIngredientName(value) {
@@ -156,6 +192,34 @@ function collectSteps(recipeId) {
     .filter(Boolean);
 }
 
+function collectCategorySlugs(data) {
+  return [...new Set(data.getAll('category_slugs').map((value) => String(value || '').trim()).filter(Boolean))];
+}
+
+async function saveRecipeCategories(recipeId, slugs) {
+  if (!recipeId || slugs.length === 0) return;
+
+  const rows = RECIPE_CATEGORIES
+    .filter((category) => slugs.includes(category.slug))
+    .map((category) => ({ slug: category.slug, name: category.name }));
+
+  const { data: categories, error: categoriesError } = await supabase
+    .from('categories')
+    .upsert(rows, { onConflict: 'slug' })
+    .select('id,slug');
+
+  if (categoriesError) throw categoriesError;
+
+  const links = (categories || []).map((category) => ({
+    recipe_id: recipeId,
+    category_id: category.id,
+  }));
+
+  if (links.length === 0) return;
+  const { error } = await supabase.from('recipe_categories').insert(links);
+  if (error) throw error;
+}
+
 async function handleSubmit(event) {
   event.preventDefault();
 
@@ -172,7 +236,10 @@ async function handleSubmit(event) {
   }
 
   const data = new FormData(form);
-  if (data.get('is_published') === 'on' && !isPremiumProfile(currentProfile)) {
+  const categorySlugs = collectCategorySlugs(data);
+  const action = event.submitter?.value === 'publish' ? 'publish' : 'save';
+  const shouldPublish = action === 'publish';
+  if (shouldPublish && !isPremiumProfile(currentProfile)) {
     statusMessage.textContent = 'Publikovanie receptov vyzaduje Premium ucet.';
     return;
   }
@@ -185,7 +252,7 @@ async function handleSubmit(event) {
     prep_time_minutes: nullableInteger(data.get('prep_time_minutes')),
     cook_time_minutes: nullableInteger(data.get('cook_time_minutes')),
     difficulty: nullableText(data.get('difficulty')),
-    is_published: data.get('is_published') === 'on',
+    is_published: shouldPublish,
     created_by_user_id: sessionData.session.user.id,
   };
 
@@ -223,6 +290,13 @@ async function handleSubmit(event) {
     }
   }
 
+  try {
+    await saveRecipeCategories(insertedRecipe.id, categorySlugs);
+  } catch (error) {
+    statusMessage.textContent = error.message;
+    return;
+  }
+
   window.location.href = `/recipes/?id=${encodeURIComponent(insertedRecipe.id)}`;
 }
 
@@ -247,11 +321,10 @@ async function requireSession() {
     .maybeSingle();
   currentProfile = profile || null;
 
-  const publishInput = form.elements.is_published;
-  if (publishInput && !isPremiumProfile(currentProfile)) {
-    publishInput.checked = false;
-    publishInput.disabled = true;
-    publishInput.closest('label')?.insertAdjacentHTML('beforeend', '<small>Publikovanie vyzaduje Premium ucet.</small>');
+  if (publishButton && !isPremiumProfile(currentProfile)) {
+    publishButton.disabled = true;
+    publishButton.title = 'Publikovanie vyzaduje Premium ucet.';
+    if (publishPremiumNote) publishPremiumNote.hidden = false;
   }
 
   await setupUserMenu();
@@ -261,6 +334,7 @@ document.querySelector('#add-ingredient').addEventListener('click', () => addIng
 document.querySelector('#add-step').addEventListener('click', () => addStepRow());
 form.addEventListener('submit', handleSubmit);
 
+renderCategoryOptions();
 addIngredientRow();
 addStepRow();
 requireSession();

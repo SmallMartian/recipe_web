@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="sk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nastavenia</title>
+    <link rel="stylesheet" href="/assets/admin.css" />
+  </head>
+  <body>
+    <main class="page-shell settings-screen">
+      <header class="site-header">
+        <a class="brand" href="/">
+          <span class="brand-mark">B</span>
+          <span>BASIL nastavenia</span>
+        </a>
+        <nav class="nav-actions">
+          <div class="profile-menu-wrap" data-user-menu hidden></div>
+        </nav>
+      </header>
+      <nav class="app-rail" data-app-nav>
+        <a href="/" data-nav="dashboard" aria-label="Dashboard"><span><ion-icon name="home-outline"></ion-icon></span><strong>Domov</strong></a>
+        <a href="/inventory/" data-nav="inventory" aria-label="Inventar"><span><ion-icon name="leaf-outline"></ion-icon></span><strong>Inventar</strong></a>
+        <a href="/shopping/" data-nav="shopping" aria-label="Nakup"><span><ion-icon name="basket-outline"></ion-icon></span><strong>Nakup</strong></a>
+        <a href="/recipes/" data-nav="recipes" aria-label="Recepty"><span><ion-icon name="restaurant-outline"></ion-icon></span><strong>Recepty</strong></a>
+      </nav>
+
+      <section class="home-hero">
+        <div>
+          <p class="eyebrow">Nastavenia</p>
+          <h1>Profil a domacnosti</h1>
+          <p class="lead">Webove nastavenia pre ucet, aktivnu domacnost, clenov a pozvanky.</p>
+        </div>
+      </section>
+
+      <section class="settings-grid">
+        <article class="panel settings-panel">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Profil</p>
+              <h2>Ucet</h2>
+            </div>
+          </div>
+          <form id="profile-form" class="form-stack">
+            <div class="profile-summary">
+              <span id="profile-avatar" class="profile-avatar"><span class="profile-initial">B</span></span>
+              <div>
+                <strong id="profile-name">BASIL user</strong>
+                <span id="profile-handle"></span>
+              </div>
+            </div>
+            <label>
+              <span>Zobrazovane meno</span>
+              <input name="display_name" type="text" autocomplete="name" />
+            </label>
+            <label>
+              <span>Email v profile</span>
+              <input name="email" type="email" autocomplete="email" />
+            </label>
+            <button type="submit" class="primary">Ulozit profil</button>
+          </form>
+        </article>
+
+        <article class="panel settings-panel">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Pozvanky</p>
+              <h2>Cakajuce pozvanky</h2>
+            </div>
+            <button type="button" id="refresh-invites">Obnovit</button>
+          </div>
+          <div id="invite-list" class="settings-list"></div>
+        </article>
+      </section>
+
+      <section class="panel settings-panel">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">Domacnosti</p>
+            <h2>Sprava domacnosti</h2>
+          </div>
+          <button type="button" class="primary" id="create-household">Nova domacnost</button>
+        </div>
+        <div id="household-list" class="settings-list"></div>
+      </section>
+
+      <section class="panel settings-panel" id="household-detail" hidden>
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">Sprava domacnosti</p>
+            <h2 id="household-detail-title">Domacnost</h2>
+          </div>
+        </div>
+
+        <form id="household-form" class="list-form settings-household-form">
+          <label>
+            <span>Nazov domacnosti</span>
+            <input name="name" type="text" required />
+          </label>
+          <button type="submit" class="primary">Ulozit nazov</button>
+          <button type="button" id="activate-household">Nastavit ako aktivnu</button>
+        </form>
+
+        <form id="household-nickname-form" class="list-form settings-household-form">
+          <label>
+            <span>Moje meno v domacnosti</span>
+            <input name="display_name" type="text" placeholder="Ako sa mas zobrazovat clenovi domacnosti" />
+          </label>
+          <button type="submit" class="primary">Ulozit meno</button>
+        </form>
+
+        <div class="settings-subsection">
+          <div class="section-title compact-title">
+            <div>
+              <p class="eyebrow">Clenovia</p>
+              <h2>Pristupy</h2>
+            </div>
+          </div>
+          <form id="invite-form" class="list-form settings-invite-form">
+            <label>
+              <span>Email alebo handle</span>
+              <input name="target" type="text" placeholder="meno#1234 alebo email" aria-describedby="invite-target-error" />
+              <small id="invite-target-error" class="field-error" hidden></small>
+            </label>
+            <label>
+              <span>Rola</span>
+              <select name="role" aria-describedby="invite-role-error">
+                <option value="editor">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+              <small id="invite-role-error" class="field-error" hidden></small>
+            </label>
+            <button type="submit" class="primary">Pozvat</button>
+          </form>
+          <p id="invite-hint" class="status-line"></p>
+          <div id="member-list" class="settings-list"></div>
+        </div>
+
+        <div class="danger-zone">
+          <button type="button" class="primary" id="save-household-changes">Ulozit zmeny</button>
+          <button type="button" class="remove" id="leave-household">Odstranit moj pristup</button>
+          <button type="button" class="remove" id="delete-household">Zmazat domacnost</button>
+        </div>
+      </section>
+
+      <p id="settings-status" class="status-line" role="status"></p>
+    </main>
+
+    <script type="module" src="https://unpkg.com/ionicons@7.4.0/dist/ionicons/ionicons.esm.js"></script>
+    <script src="/assets/env.js"></script>
+    <script type="module" src="/assets/settings.js"></script>
+  </body>
+</html>

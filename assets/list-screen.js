@@ -1,11 +1,14 @@
 import { hasSupabaseConfig, supabase } from './supabase-client.js';
 import { setupUserMenu } from './user-menu.js';
 import {
+  areUnitsCompatible,
   buildInventoryRow,
   buildShoppingRow,
   computeExpiryForName,
+  formatQuantityValue,
   getSuggestedDefaults,
   loadItemPreferences,
+  normalizeQuantityToBaseUnit,
   normalizeItemUnit,
   pickCanonicalDisplayName,
   upsertItemPreferenceEverywhere,
@@ -23,6 +26,9 @@ const statusLine = document.querySelector('#list-status');
 const refreshButton = document.querySelector('#refresh-list');
 const sortSelect = document.querySelector('#list-sort');
 const params = new URLSearchParams(window.location.search);
+const detailModal = document.createElement('div');
+const shoppingCompleteWrap = document.createElement('div');
+const shoppingCompleteButton = document.createElement('button');
 
 let currentSession = null;
 let currentList = null;
@@ -30,6 +36,30 @@ let currentSort = listType === 'inventory' && params.get('sort') === 'expiry' ? 
 let currentHouseholdId = null;
 let currentPreferences = { itemPreferences: new Map(), quickPreferences: new Map() };
 let listRealtimeChannel = null;
+let currentItems = [];
+let activeGroupKey = null;
+
+detailModal.className = 'modal-backdrop list-detail-modal';
+detailModal.hidden = true;
+detailModal.innerHTML = `
+  <button type="button" class="modal-scrim" data-action="close-detail" aria-label="Zavriet"></button>
+  <section class="modal-card list-detail-card" role="dialog" aria-modal="true" aria-labelledby="list-detail-title">
+    <div id="list-detail-content"></div>
+  </section>
+`;
+document.body.append(detailModal);
+const detailContent = detailModal.querySelector('#list-detail-content');
+
+if (listType === 'shopping') {
+  shoppingCompleteWrap.className = 'shopping-complete-wrap';
+  shoppingCompleteButton.type = 'button';
+  shoppingCompleteButton.id = 'complete-shopping';
+  shoppingCompleteButton.className = 'primary complete-shopping-button';
+  shoppingCompleteButton.textContent = 'Nakupene';
+  shoppingCompleteButton.disabled = true;
+  shoppingCompleteWrap.append(shoppingCompleteButton);
+  itemsTarget.insertAdjacentElement('afterend', shoppingCompleteWrap);
+}
 
 function setStatus(value) {
   statusLine.textContent = value || '';
@@ -89,6 +119,36 @@ function convertQuantity(quantity, fromUnit, toUnit) {
   const numeric = quantityNumber(quantity);
   if (from.family !== to.family) return numeric;
   return (numeric * from.factor) / to.factor;
+}
+
+function getBaseUnitForUnit(unit) {
+  const family = UNIT_META[normalizeItemUnit(unit)]?.family || 'count';
+  if (family === 'volume') return 'ml';
+  if (family === 'mass') return 'g';
+  return 'pcs';
+}
+
+function getQuickConsumeOptions(unit) {
+  const family = UNIT_META[normalizeItemUnit(unit)]?.family || 'count';
+
+  if (family === 'volume') {
+    return [
+      { quantity: 200, unit: 'ml' },
+      { quantity: 500, unit: 'ml' },
+    ];
+  }
+
+  if (family === 'mass') {
+    return [
+      { quantity: 100, unit: 'g' },
+      { quantity: 250, unit: 'g' },
+    ];
+  }
+
+  return [
+    { quantity: 1, unit: 'pcs' },
+    { quantity: 2, unit: 'pcs' },
+  ];
 }
 
 function groupListItems(items) {
@@ -194,12 +254,12 @@ async function loadHouseholds() {
   return Array.isArray(data) ? data : [];
 }
 
-async function getDefaultList(householdId) {
+async function getDefaultList(householdId, targetType = listType) {
   const { data: existing, error: existingError } = await supabase
     .from('lists')
     .select('id,type,name,is_default')
     .eq('household_id', householdId)
-    .eq('type', listType)
+    .eq('type', targetType)
     .eq('is_default', true)
     .maybeSingle();
 
@@ -208,15 +268,15 @@ async function getDefaultList(householdId) {
 
   const { data: createdId, error: rpcError } = await supabase.rpc('get_or_create_default_list', {
     target_household_id: householdId,
-    target_type: listType,
+    target_type: targetType,
   });
 
   if (rpcError) throw rpcError;
 
   return {
     id: createdId,
-    type: listType,
-    name: listType === 'inventory' ? 'Inventory' : 'Shopping',
+    type: targetType,
+    name: targetType === 'inventory' ? 'Inventory' : 'Shopping',
     is_default: true,
   };
 }
@@ -272,6 +332,7 @@ function renderItems(items) {
 
   if (groups.length === 0) {
     itemsTarget.innerHTML = `<p class="empty-state">${listType === 'inventory' ? 'Inventar je prazdny.' : 'Nakupny zoznam je prazdny.'}</p>`;
+    updateShoppingCompleteButton();
     return;
   }
 
@@ -282,7 +343,7 @@ function renderItems(items) {
         listType === 'inventory' && group.expiry_date ? `Najblizsia expiracia ${group.expiry_date}` : '',
         listType === 'inventory' && group.min_stock !== null ? `Minimum ${group.min_stock}` : '',
         group.items.length > 1 ? `${group.items.length} zaznamy` : '',
-        listType === 'shopping' && checked ? 'Vybavene' : '',
+        listType === 'shopping' && checked ? 'V kosiku' : '',
       ].filter(Boolean);
 
       return `
@@ -290,28 +351,42 @@ function renderItems(items) {
           <div class="item-main">
             ${
               listType === 'shopping'
-                ? `<input type="checkbox" data-action="toggle-group" ${checked ? 'checked' : ''} aria-label="Vybavene" />`
+                ? `<input type="checkbox" data-action="toggle-group" ${checked ? 'checked' : ''} aria-label="V kosiku" />`
                 : ''
             }
-            <div>
+            <button type="button" class="item-open" data-action="open-detail">
               <strong>${escapeHtml(group.name)}</strong>
               <span>${escapeHtml(detailParts.join(' · '))}</span>
-            </div>
+            </button>
           </div>
           <div class="item-actions">
             <span class="qty-chip">${escapeHtml(formatQuantity(group))}</span>
+            ${
+              listType === 'inventory'
+                ? `<button type="button" data-action="quick-consume-group">Spotrebovat</button>`
+                : `<button type="button" data-action="move-group-to-inventory">Do inventara</button>`
+            }
             <button type="button" class="remove" data-action="delete-group">Zmazat</button>
           </div>
         </article>
       `;
     })
     .join('');
+  updateShoppingCompleteButton();
+}
+
+function updateShoppingCompleteButton() {
+  if (listType !== 'shopping') return;
+  const checkedCount = currentItems.filter((item) => item.status === 'checked').length;
+  shoppingCompleteButton.disabled = checkedCount === 0;
+  shoppingCompleteButton.textContent = checkedCount > 0 ? `Nakupene (${checkedCount})` : 'Nakupene';
 }
 
 async function refreshItems() {
   setStatus('Nacitavam...');
-  const items = await loadItems();
-  renderItems(items);
+  currentItems = await loadItems();
+  renderItems(currentItems);
+  if (activeGroupKey && !detailModal.hidden) renderDetail(activeGroupKey);
   setStatus(listType === 'inventory' && currentSort === 'expiry' ? 'Zoradene podla najblizsej expiracie.' : '');
 }
 
@@ -354,6 +429,291 @@ async function setHousehold(householdId) {
   applySuggestedDefaults({ force: true });
   subscribeToCurrentList();
   await refreshItems();
+}
+
+function findGroup(groupKey) {
+  return groupListItems(currentItems).find((entry) => entry.key === groupKey) || null;
+}
+
+function getPatchFromForm(formElement) {
+  const data = new FormData(formElement);
+  const patch = {
+    name: String(data.get('name') || '').trim(),
+    quantity: nullableNumber(data.get('quantity')) ?? 1,
+    unit: normalizeItemUnit(data.get('unit') || 'pcs'),
+    expiry_date: data.get('expiry_date') || null,
+    updated_by: currentSession.user.id,
+  };
+
+  if (listType === 'inventory') {
+    patch.min_stock = nullableNumber(data.get('min_stock'));
+  }
+
+  return patch;
+}
+
+function closeDetail() {
+  activeGroupKey = null;
+  detailModal.hidden = true;
+  detailContent.innerHTML = '';
+}
+
+function renderDetail(groupKey) {
+  const group = findGroup(groupKey);
+  if (!group) {
+    closeDetail();
+    return;
+  }
+
+  activeGroupKey = groupKey;
+  const sortedItems = [...group.items].sort((a, b) => {
+    const expiryA = a.expiry_date || '9999-12-31';
+    const expiryB = b.expiry_date || '9999-12-31';
+    return expiryA.localeCompare(expiryB) || String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
+  });
+  const baseUnit = getBaseUnitForUnit(group.unit);
+  const quickOptions = getQuickConsumeOptions(group.unit);
+
+  detailContent.innerHTML = `
+    <div class="detail-heading">
+      <form class="detail-name-form" data-action="rename-group">
+        <input name="name" value="${escapeHtml(group.name)}" aria-label="Nazov skupiny" />
+        <button type="submit" class="primary">Ulozit nazov</button>
+      </form>
+      <button type="button" data-action="close-detail">Zavriet</button>
+    </div>
+    <p class="lead compact">${escapeHtml(formatQuantity(group))}${group.expiry_date ? ` - najblizsia expiracia ${escapeHtml(group.expiry_date)}` : ''}</p>
+    ${
+      listType === 'inventory'
+        ? `
+          <div class="quick-consume-box">
+            <strong>Rychla spotreba</strong>
+            <div class="quick-actions">
+              ${quickOptions
+                .map(
+                  (option) =>
+                    `<button type="button" data-action="consume-option" data-quantity="${option.quantity}" data-unit="${option.unit}">-${option.quantity} ${option.unit}</button>`,
+                )
+                .join('')}
+            </div>
+            <form class="consume-form" data-action="consume-custom">
+              <input name="quantity" type="number" min="0" step="0.001" placeholder="Mnozstvo" />
+              <span>${escapeHtml(baseUnit)}</span>
+              <button type="submit" class="primary">Spotrebovat</button>
+            </form>
+          </div>
+        `
+        : ''
+    }
+    <div class="detail-items">
+      ${sortedItems
+        .map(
+          (item) => `
+            <form class="detail-item-form is-${escapeHtml(listType)}" data-action="save-item" data-item-id="${escapeHtml(item.id)}">
+              <label>
+                <span>Nazov</span>
+                <input name="name" value="${escapeHtml(item.name)}" required />
+              </label>
+              <label>
+                <span>Mnozstvo</span>
+                <input name="quantity" type="number" min="0" step="0.001" value="${escapeHtml(formatQuantityValue(item.quantity))}" />
+              </label>
+              <label>
+                <span>Jednotka</span>
+                <select name="unit">
+                  ${['pcs', 'g', 'dkg', 'kg', 'ml', 'l']
+                    .map((unit) => `<option value="${unit}" ${normalizeItemUnit(item.unit) === unit ? 'selected' : ''}>${unit}</option>`)
+                    .join('')}
+                </select>
+              </label>
+              <label>
+                <span>${listType === 'inventory' ? 'Expiracia' : 'Odhad expiracie'}</span>
+                <input name="expiry_date" type="date" value="${escapeHtml(item.expiry_date || '')}" />
+              </label>
+              ${
+                listType === 'inventory'
+                  ? `
+                    <label>
+                      <span>Minimum</span>
+                      <input name="min_stock" type="number" min="0" step="0.001" value="${escapeHtml(item.min_stock ?? '')}" />
+                    </label>
+                  `
+                  : ''
+              }
+              <div class="detail-item-actions">
+                ${
+                  listType === 'shopping'
+                    ? `<button type="button" data-action="move-item-to-inventory" data-item-id="${escapeHtml(item.id)}">Do inventara</button>`
+                    : ''
+                }
+                <button type="submit" class="primary">Ulozit</button>
+                <button type="button" class="remove" data-action="delete-item" data-item-id="${escapeHtml(item.id)}">Zmazat</button>
+              </div>
+            </form>
+          `,
+        )
+        .join('')}
+    </div>
+  `;
+
+  detailModal.hidden = false;
+}
+
+function openDetail(groupKey) {
+  renderDetail(groupKey);
+}
+
+async function renameGroup(group, nextName) {
+  const name = String(nextName || '').trim();
+  if (!group || !name) return;
+  const ids = group.items.map((item) => item.id).filter(Boolean);
+  if (ids.length === 0) return;
+
+  const { error } = await supabase
+    .from('list_items')
+    .update({ name, updated_by: currentSession.user.id })
+    .in('id', ids);
+
+  if (error) throw error;
+  await upsertItemPreferenceEverywhere({
+    supabase,
+    householdId: currentHouseholdId,
+    userId: currentSession.user.id,
+    name,
+    unit: group.unit,
+    expiryDate: group.expiry_date,
+    minStock: group.min_stock,
+  });
+}
+
+async function saveItem(itemId, formElement) {
+  const patch = getPatchFromForm(formElement);
+  if (!patch.name) return;
+
+  const { error } = await supabase.from('list_items').update(patch).eq('id', itemId);
+  if (error) throw error;
+
+  await upsertItemPreferenceEverywhere({
+    supabase,
+    householdId: currentHouseholdId,
+    userId: currentSession.user.id,
+    name: patch.name,
+    unit: patch.unit,
+    expiryDate: patch.expiry_date,
+    minStock: listType === 'inventory' ? patch.min_stock : null,
+  });
+
+  if (listType === 'shopping') {
+    await upsertQuickPreference({
+      supabase,
+      householdId: currentHouseholdId,
+      userId: currentSession.user.id,
+      name: patch.name,
+      quantity: patch.quantity,
+      unit: patch.unit,
+    });
+  }
+}
+
+async function consumeInventoryGroup(group, amount, unit) {
+  if (!group || listType !== 'inventory') return;
+
+  const targetBase = normalizeQuantityToBaseUnit(amount, unit);
+  let remaining = quantityNumber(targetBase.quantity);
+  if (remaining <= 0) return;
+
+  const updates = [];
+  const deletes = [];
+
+  for (const item of [...group.items].sort((a, b) => (a.expiry_date || '9999-12-31').localeCompare(b.expiry_date || '9999-12-31'))) {
+    if (remaining <= 0) break;
+    if (!areUnitsCompatible(item.unit, targetBase.unit)) continue;
+
+    const itemBase = normalizeQuantityToBaseUnit(item.quantity, item.unit);
+    const currentQuantity = quantityNumber(itemBase.quantity);
+    if (currentQuantity <= 0) {
+      deletes.push(item.id);
+      continue;
+    }
+
+    const consumed = Math.min(currentQuantity, remaining);
+    remaining -= consumed;
+    const nextQuantity = currentQuantity - consumed;
+
+    if (nextQuantity <= 0.000001) {
+      deletes.push(item.id);
+    } else {
+      updates.push(
+        supabase
+          .from('list_items')
+          .update({
+            quantity: Number(formatQuantityValue(nextQuantity)),
+            unit: itemBase.unit,
+            updated_by: currentSession.user.id,
+          })
+          .eq('id', item.id),
+      );
+    }
+  }
+
+  const results = await Promise.all(updates);
+  const failed = results.find((result) => result.error);
+  if (failed?.error) throw failed.error;
+
+  if (deletes.length > 0) {
+    const { error } = await supabase.from('list_items').delete().in('id', deletes);
+    if (error) throw error;
+  }
+}
+
+async function moveShoppingItemToInventory(item) {
+  if (!item || listType !== 'shopping') return;
+
+  const inventoryList = await getDefaultList(currentHouseholdId, 'inventory');
+  const row = buildInventoryRow({
+    listId: inventoryList.id,
+    userId: currentSession.user.id,
+    input: {
+      clientItemId: getClientItemId(),
+      quantity: item.quantity,
+      unit: item.unit,
+      expiryDate: item.expiry_date || computeExpiryForName(item.name, currentPreferences),
+      minStock: item.min_stock ?? null,
+    },
+    canonicalName: item.name,
+  });
+
+  await upsertListItemWithMerge({
+    supabase,
+    listType: 'inventory',
+    row,
+    userId: currentSession.user.id,
+  });
+
+  const { error } = await supabase.from('list_items').delete().eq('id', item.id);
+  if (error) throw error;
+}
+
+async function moveCheckedShoppingItemsToInventory() {
+  if (listType !== 'shopping') return;
+
+  const checkedItems = currentItems.filter((item) => item.status === 'checked');
+  if (checkedItems.length === 0) return;
+
+  setStatus('Presuvam nakupene polozky do inventara...');
+  shoppingCompleteButton.disabled = true;
+
+  try {
+    for (const item of checkedItems) {
+      await moveShoppingItemToInventory(item);
+    }
+    closeDetail();
+    await refreshItems();
+    setStatus('Nakupene polozky su v inventari.');
+  } catch (error) {
+    setStatus(error.message);
+    updateShoppingCompleteButton();
+  }
 }
 
 async function addItem(event) {
@@ -444,10 +804,11 @@ async function addItem(event) {
 }
 
 async function handleItemAction(event) {
-  const action = event.target.dataset.action;
+  const actionTarget = event.target.closest('[data-action]');
+  const action = actionTarget?.dataset.action;
   if (!action) return;
 
-  const row = event.target.closest('[data-group-key]');
+  const row = actionTarget.closest('[data-group-key]');
   const groupKey = row?.dataset.groupKey;
   if (!groupKey) return;
 
@@ -457,8 +818,13 @@ async function handleItemAction(event) {
   const ids = group.items.map((item) => item.id).filter(Boolean);
   if (ids.length === 0) return;
 
+  if (action === 'open-detail' && event.type === 'click') {
+    openDetail(groupKey);
+    return;
+  }
+
   if (action === 'toggle-group' && event.type === 'change') {
-    const status = event.target.checked ? 'checked' : 'active';
+    const status = actionTarget.checked ? 'checked' : 'active';
     const { error } = await supabase
       .from('list_items')
       .update({ status, updated_by: currentSession.user.id })
@@ -481,6 +847,87 @@ async function handleItemAction(event) {
     }
 
     await refreshItems();
+  }
+
+  if (action === 'quick-consume-group' && event.type === 'click') {
+    const option = getQuickConsumeOptions(group.unit)[0];
+    setStatus('Spotrebuvam...');
+    try {
+      await consumeInventoryGroup(group, option.quantity, option.unit);
+      await refreshItems();
+    } catch (error) {
+      setStatus(error.message);
+    }
+  }
+
+  if (action === 'move-group-to-inventory' && event.type === 'click') {
+    setStatus('Presuvam do inventara...');
+    try {
+      for (const item of group.items) {
+        await moveShoppingItemToInventory(item);
+      }
+      await refreshItems();
+    } catch (error) {
+      setStatus(error.message);
+    }
+  }
+}
+
+async function handleDetailAction(event) {
+  const action = event.target.dataset.action || event.target.closest('form')?.dataset.action;
+  if (!action) return;
+
+  if (action === 'close-detail' && event.type === 'click') {
+    closeDetail();
+    return;
+  }
+
+  const group = activeGroupKey ? findGroup(activeGroupKey) : null;
+
+  try {
+    if (action === 'rename-group' && event.type === 'submit') {
+      event.preventDefault();
+      await renameGroup(group, event.target.elements.name.value);
+      await refreshItems();
+      return;
+    }
+
+    if (action === 'save-item' && event.type === 'submit') {
+      event.preventDefault();
+      await saveItem(event.target.dataset.itemId, event.target);
+      await refreshItems();
+      return;
+    }
+
+    if (action === 'delete-item' && event.type === 'click') {
+      const { error } = await supabase.from('list_items').delete().eq('id', event.target.dataset.itemId);
+      if (error) throw error;
+      await refreshItems();
+      return;
+    }
+
+    if (action === 'consume-option' && event.type === 'click') {
+      await consumeInventoryGroup(group, event.target.dataset.quantity, event.target.dataset.unit);
+      await refreshItems();
+      return;
+    }
+
+    if (action === 'consume-custom' && event.type === 'submit') {
+      event.preventDefault();
+      const baseUnit = getBaseUnitForUnit(group?.unit);
+      await consumeInventoryGroup(group, event.target.elements.quantity.value, baseUnit);
+      event.target.reset();
+      await refreshItems();
+      return;
+    }
+
+    if (action === 'move-item-to-inventory' && event.type === 'click') {
+      const item = currentItems.find((entry) => entry.id === event.target.dataset.itemId);
+      await moveShoppingItemToInventory(item);
+      await refreshItems();
+    }
+  } catch (error) {
+    setStatus(error.message);
   }
 }
 
@@ -529,6 +976,9 @@ form.elements.name?.addEventListener('blur', () => applySuggestedDefaults({ forc
 form.addEventListener('submit', addItem);
 itemsTarget.addEventListener('click', handleItemAction);
 itemsTarget.addEventListener('change', handleItemAction);
+detailModal.addEventListener('click', handleDetailAction);
+detailModal.addEventListener('submit', handleDetailAction);
+shoppingCompleteButton.addEventListener('click', moveCheckedShoppingItemsToInventory);
 refreshButton.addEventListener('click', refreshItems);
 window.addEventListener('focus', () => {
   if (currentList?.id) refreshItems().catch((error) => setStatus(error.message));

@@ -65,10 +65,11 @@
             </label>
           </div>
 
-          <label class="check-row">
-            <input name="is_published" type="checkbox" />
-            <span>Publikovany</span>
-          </label>
+          <div class="field-block">
+            <span class="field-label">Kategorie</span>
+            <div id="category-list" class="chip-grid"></div>
+          </div>
+
         </section>
 
         <section class="panel">
@@ -89,7 +90,11 @@
 
         <footer class="actions">
           <p id="status-message" role="status"></p>
-          <button type="submit" class="primary">Ulozit recept</button>
+          <div class="action-buttons">
+            <button type="submit" name="recipe_action" value="save">Ulozit</button>
+            <button type="submit" name="recipe_action" value="publish" class="primary" data-publish-button>Publikovat</button>
+          </div>
+          <small class="premium-action-note" data-premium-publish-note hidden>Publikovanie vyzaduje Premium ucet.</small>
         </footer>
       </form>
     </main>

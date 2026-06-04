@@ -74,10 +74,18 @@
           <img id="recipe-image" alt="" />
           <div>
             <p id="recipe-status" class="eyebrow"></p>
-            <h1 id="recipe-title"></h1>
+            <div class="editable-title-row">
+              <h1 id="recipe-title"></h1>
+              <button type="button" class="section-edit-button" data-edit-section="basic" hidden aria-label="Upravit zaklad">
+                <ion-icon name="pencil-outline"></ion-icon>
+              </button>
+            </div>
             <p id="recipe-description" class="lead"></p>
             <div id="recipe-meta" class="meta-row"></div>
+            <div id="recipe-basic-editor" hidden></div>
             <button type="button" id="save-recipe-button" class="primary save-button" hidden>Ulozit recept</button>
+            <small id="save-recipe-premium-note" class="premium-action-note" hidden>Ukladanie komunitnych receptov vyzaduje Premium ucet.</small>
+            <button type="button" id="cook-recipe-button" class="primary save-button" hidden>Uvarene</button>
           </div>
         </section>
 
@@ -88,6 +96,9 @@
                 <p class="eyebrow">Suroviny</p>
                 <h2>Co potrebujes</h2>
               </div>
+              <button type="button" class="section-edit-button" data-edit-section="ingredients" hidden aria-label="Upravit suroviny">
+                <ion-icon name="pencil-outline"></ion-icon>
+              </button>
             </div>
             <div id="recipe-ingredients" class="list-stack"></div>
           </section>
@@ -98,8 +109,11 @@
                 <p class="eyebrow">Postup</p>
                 <h2>Ako sa robi</h2>
               </div>
+              <button type="button" class="section-edit-button" data-edit-section="steps" hidden aria-label="Upravit postup">
+                <ion-icon name="pencil-outline"></ion-icon>
+              </button>
             </div>
-            <ol id="recipe-steps" class="steps-list"></ol>
+            <div id="recipe-steps" class="steps-list"></div>
           </section>
         </div>
       </article>

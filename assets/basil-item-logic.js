@@ -67,7 +67,7 @@ function convertQuantity(quantity, fromUnit, toUnit) {
   return (numeric * from.factor) / to.factor;
 }
 
-function normalizeQuantityToBaseUnit(quantity, unit) {
+export function normalizeQuantityToBaseUnit(quantity, unit) {
   const normalizedUnit = normalizeItemUnit(unit);
   const meta = getUnitMeta(normalizedUnit);
   const baseUnit = meta.baseUnit;
@@ -84,6 +84,10 @@ function normalizeQuantityToBaseUnit(quantity, unit) {
   }
 
   return { quantity: String(Math.max(1, Math.round(baseQuantity))), unit: baseUnit };
+}
+
+export function areUnitsCompatible(leftUnit, rightUnit) {
+  return getUnitMeta(leftUnit).family === getUnitMeta(rightUnit).family;
 }
 
 export function toIsoDate(value = new Date()) {
